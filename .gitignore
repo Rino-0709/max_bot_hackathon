@@ -1,0 +1,17 @@
+node_modules
+dist
+.env
+.env.local
+.env.production
+*.exe
+*.test
+*.log
+data/
+cmd/maxbot/data/
+backups/
+
+# Local planning drafts. Keep them on the working machine, not in the public repo.
+Architecture and data model draft.txt
+Case description.txt
+Project specification draft.txt
+MVP implementation notes.txt

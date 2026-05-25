@@ -1,0 +1,10 @@
+.env
+.git
+.idea
+.vscode
+*.exe
+*.test
+data/
+dist/
+node_modules/
+cmd/maxbot/data/

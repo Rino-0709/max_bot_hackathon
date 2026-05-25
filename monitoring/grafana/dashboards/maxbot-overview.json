@@ -1,0 +1,573 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "expr": "maxbot_uptime_seconds",
+          "legendFormat": "время работы",
+          "refId": "A"
+        }
+      ],
+      "description": "Сколько секунд бот работает после последнего запуска контейнера.",
+      "title": "Время работы бота",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "expr": "sum(maxbot_pass_requests_total)",
+          "legendFormat": "заявки",
+          "refId": "A"
+        }
+      ],
+      "title": "Всего заявок",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "expr": "maxbot_users_total",
+          "legendFormat": "пользователи",
+          "refId": "A"
+        }
+      ],
+      "title": "Пользователи",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "expr": "maxbot_entry_events_total",
+          "legendFormat": "подтвержденные проходы",
+          "refId": "A"
+        }
+      ],
+      "title": "Подтвержденные проходы",
+      "type": "stat",
+      "description": "Сколько раз администратор подтвердил проход по одобренной заявке. Повторный вход в тот же день тоже считается отдельным проходом."
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 4
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(maxbot_pass_requests_total{status=\"pending_review\"}) or vector(0)",
+          "legendFormat": "на рассмотрении",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(maxbot_pass_requests_total{status=\"clarification_requested\"}) or vector(0)",
+          "legendFormat": "ожидает уточнения",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(maxbot_pass_requests_total{status=\"approved\"}) or vector(0)",
+          "legendFormat": "одобрена",
+          "refId": "C"
+        },
+        {
+          "expr": "sum(maxbot_pass_requests_total{status=\"passed\"}) or vector(0)",
+          "legendFormat": "проходил",
+          "refId": "D"
+        },
+        {
+          "expr": "sum(maxbot_pass_requests_total{status=\"rejected\"}) or vector(0)",
+          "legendFormat": "отклонена",
+          "refId": "E"
+        },
+        {
+          "expr": "sum(maxbot_pass_requests_total{status=\"expired\"}) or vector(0)",
+          "legendFormat": "истекла",
+          "refId": "F"
+        },
+        {
+          "expr": "sum(maxbot_pass_requests_total{status=\"no_show\"}) or vector(0)",
+          "legendFormat": "не пришел",
+          "refId": "G"
+        },
+        {
+          "expr": "sum(maxbot_pass_requests_total{status=\"closed\"}) or vector(0)",
+          "legendFormat": "закрыта",
+          "refId": "H"
+        },
+        {
+          "expr": "sum(maxbot_pass_requests_total{status=\"cancelled_by_initiator\"}) or vector(0)",
+          "legendFormat": "отменена инициатором",
+          "refId": "I"
+        }
+      ],
+      "description": "Текущее количество заявок по основным статусам. Линии названы по-русски, чтобы не показывать технические коды статусов.",
+      "title": "Заявки по статусам",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "showPoints": "never"
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 4
+      },
+      "id": 6,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(maxbot_updates_total{type=\"message_created\"}[5m])) or vector(0)",
+          "legendFormat": "сообщения пользователей",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(maxbot_updates_total{type=\"message_callback\"}[5m])) or vector(0)",
+          "legendFormat": "нажатия кнопок",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(rate(maxbot_updates_total{type=\"bot_started\"}[5m])) or vector(0)",
+          "legendFormat": "первый запуск бота",
+          "refId": "C"
+        },
+        {
+          "expr": "sum(rate(maxbot_replies_total[5m])) or vector(0)",
+          "legendFormat": "ответы бота",
+          "refId": "D"
+        }
+      ],
+      "description": "Скорость событий в секунду. Сообщения пользователей - текст, нажатия кнопок - inline-кнопки, ответы бота - отправленные сообщения.",
+      "title": "Активность бота в секунду",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 12
+      },
+      "id": 7,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "expr": "maxbot_db_open_connections",
+          "legendFormat": "всего открыто",
+          "refId": "A"
+        },
+        {
+          "expr": "maxbot_db_in_use_connections",
+          "legendFormat": "используются",
+          "refId": "B"
+        },
+        {
+          "expr": "maxbot_db_idle_connections",
+          "legendFormat": "ожидают",
+          "refId": "C"
+        }
+      ],
+      "description": "Подключения бота к PostgreSQL: всего открыто, занято запросами и простаивает в пуле.",
+      "title": "Подключения к PostgreSQL",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "showPoints": "never"
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 12
+      },
+      "id": 8,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(maxbot_poll_errors_total[5m])) or vector(0)",
+          "legendFormat": "ошибки получения событий MAX",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(maxbot_update_errors_total[5m])) or vector(0)",
+          "legendFormat": "ошибки обработки событий",
+          "refId": "B"
+        }
+      ],
+      "description": "Скорость ошибок в секунду. В норме обе линии должны быть около нуля.",
+      "title": "Ошибки в секунду",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "description": "Если значение большое, MAX отдал событие боту с задержкой. Это главный индикатор задержки не на стороне обработки бота.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 0,
+        "y": 20
+      },
+      "id": 9,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "expr": "maxbot_last_update_lag_seconds",
+          "legendFormat": "задержка последнего события",
+          "refId": "A"
+        },
+        {
+          "expr": "maxbot_max_update_lag_seconds",
+          "legendFormat": "максимальная задержка после запуска",
+          "refId": "B"
+        }
+      ],
+      "title": "Задержка входящих событий",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "description": "Размер последнего ответа MAX polling и длительность последнего long-poll запроса. Большая пачка означает, что несколько действий пришли боту одновременно.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 12,
+        "y": 20
+      },
+      "id": 10,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "expr": "maxbot_last_update_batch_size",
+          "legendFormat": "событий в последней пачке",
+          "refId": "A"
+        },
+        {
+          "expr": "maxbot_last_poll_duration_seconds",
+          "legendFormat": "длительность polling-запроса, сек",
+          "refId": "B"
+        }
+      ],
+      "title": "Последняя пачка событий",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 40,
+  "tags": [
+    "maxbot",
+    "spring-code"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Весенний_код_1 overview",
+  "uid": "spring-code-maxbot-overview",
+  "version": 4,
+  "weekStart": ""
+}
