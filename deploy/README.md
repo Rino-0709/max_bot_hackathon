@@ -88,6 +88,7 @@ http://127.0.0.1:8080/scanner
 Публичный proxy для QR-сканера, если `SCANNER_BIND=0.0.0.0`:
 
 ```text
+https://scanner.aksenovaks.online/scanner
 http://SERVER_IP:8081/scanner
 https://SERVER_IP:8443/scanner
 ```
