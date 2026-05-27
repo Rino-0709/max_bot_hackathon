@@ -266,7 +266,7 @@ func (app *App) reply(ctx context.Context, bctx BotContext, text string, rows []
 	return app.api.SendToUser(ctx, bctx.User.UserID, text, rows)
 }
 
-// handleCommand обрабатывает /start и служебный bootstrap-код.
+// handleCommand обрабатывает основные текстовые команды бота.
 func (app *App) handleCommand(ctx context.Context, bctx BotContext, user UserRow) error {
 	fields := strings.Fields(bctx.Text)
 	command := fields[0]
@@ -285,15 +285,6 @@ func (app *App) handleCommand(ctx context.Context, bctx BotContext, user UserRow
 	case "/reset_session":
 		app.clearSession(user.MaxUserID)
 		return app.reply(ctx, bctx, "Текущий текстовый ввод сброшен.", app.mainMenu(user))
-	case "/admin":
-		if app.cfg.AdminBootstrapCode == "" || len(fields) < 2 || fields[1] != app.cfg.AdminBootstrapCode {
-			return app.reply(ctx, bctx, "Код администратора не принят.", mainMenuRows())
-		}
-		if err := app.setRole(user.MaxUserID, roleAdmin); err != nil {
-			return err
-		}
-		user.Role = roleAdmin
-		return app.reply(ctx, bctx, "Роль администратора выдана.", app.mainMenu(user))
 	}
 	return app.reply(ctx, bctx, "Неизвестная команда. Используйте /start.", mainMenuRows())
 }

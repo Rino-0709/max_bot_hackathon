@@ -40,7 +40,7 @@ bash deploy/server-setup.sh
 
 ```bash
 cd /opt/spring-code-1
-cp .env.production.example .env
+cp .env.example .env
 nano .env
 ```
 

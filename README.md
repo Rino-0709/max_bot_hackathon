@@ -69,7 +69,6 @@ DATA_DIR=./data
 POLICY_VERSION=personal-data-v1
 ADMIN_USER_IDS=
 TECH_ADMIN_USER_IDS=254098701
-ADMIN_BOOTSTRAP_CODE=Vesna2026
 ```
 
 Роли читаются именно из `.env`, не из `.env.example`.
@@ -170,7 +169,7 @@ Grafana автоматически подключает Prometheus и загру
 
 ```bash
 cd /opt/spring-code-1
-cp .env.production.example .env
+cp .env.example .env
 nano .env
 docker compose up -d --build
 bash deploy/check-server.sh
@@ -206,7 +205,6 @@ go build ./cmd/maxbot
 
 - `/start` - открыть главное меню;
 - `/whoami` - показать MAX user id и текущую роль;
-- `/admin <код>` - выдать текущему аккаунту роль администратора через bootstrap-код;
 - `/reset_session` - сбросить текущий текстовый ввод.
 
 Можно также отправить текст `Главное меню` или `Меню` - бот откроет главное меню без команды `/start`.

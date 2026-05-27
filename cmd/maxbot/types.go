@@ -29,15 +29,14 @@ var initialZones = []struct {
 }
 
 type Config struct {
-	Token              string
-	DBDriver           string
-	DataDir            string
-	DatabaseURL        string
-	PolicyVersion      string
-	MetricsAddr        string
-	AdminBootstrapCode string
-	AdminIDs           map[int64]bool
-	TechAdminIDs       map[int64]bool
+	Token         string
+	DBDriver      string
+	DataDir       string
+	DatabaseURL   string
+	PolicyVersion string
+	MetricsAddr   string
+	AdminIDs      map[int64]bool
+	TechAdminIDs  map[int64]bool
 }
 
 type App struct {

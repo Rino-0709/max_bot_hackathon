@@ -10,7 +10,7 @@ data/
 cmd/maxbot/data/
 backups/
 
-# Local planning drafts. Keep them on the working machine, not in the public repo.
+# Локальные черновики планирования. Храним на рабочей машине, не в публичном репозитории.
 Architecture and data model draft.txt
 Case description.txt
 Project specification draft.txt

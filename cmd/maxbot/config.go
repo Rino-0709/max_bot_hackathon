@@ -35,15 +35,14 @@ func loadDotEnv(path string) error {
 // loadConfig собирает настройки бота из переменных окружения.
 func loadConfig() Config {
 	return Config{
-		Token:              os.Getenv("BOT_TOKEN"),
-		DBDriver:           strings.ToLower(getEnv("DB_DRIVER", "postgres")),
-		DataDir:            getEnv("DATA_DIR", "./data"),
-		DatabaseURL:        os.Getenv("DATABASE_URL"),
-		PolicyVersion:      getEnv("POLICY_VERSION", "personal-data-v1"),
-		MetricsAddr:        getEnv("METRICS_ADDR", ":8080"),
-		AdminBootstrapCode: os.Getenv("ADMIN_BOOTSTRAP_CODE"),
-		AdminIDs:           parseIDSet(os.Getenv("ADMIN_USER_IDS")),
-		TechAdminIDs:       parseIDSet(os.Getenv("TECH_ADMIN_USER_IDS")),
+		Token:         os.Getenv("BOT_TOKEN"),
+		DBDriver:      strings.ToLower(getEnv("DB_DRIVER", "postgres")),
+		DataDir:       getEnv("DATA_DIR", "./data"),
+		DatabaseURL:   os.Getenv("DATABASE_URL"),
+		PolicyVersion: getEnv("POLICY_VERSION", "personal-data-v1"),
+		MetricsAddr:   getEnv("METRICS_ADDR", ":8080"),
+		AdminIDs:      parseIDSet(os.Getenv("ADMIN_USER_IDS")),
+		TechAdminIDs:  parseIDSet(os.Getenv("TECH_ADMIN_USER_IDS")),
 	}
 }
 
