@@ -394,6 +394,37 @@ func TestDuplicateStartFromMaxEventsIsSuppressed(t *testing.T) {
 	}
 }
 
+// TestUnknownTextShowsMenuWithoutStartHint проверяет отдельный сценарий бота, чтобы не гонять его вручную.
+func TestUnknownTextShowsMenuWithoutStartHint(t *testing.T) {
+	app := newTestApp(t)
+	upsertConsentedUser(t, app)
+
+	NewScenario(t, app, testUser()).
+		Say("что тут можно сделать?").
+		ExpectText("Выберите действие").
+		ExpectButton("Создать пропуск").
+		ExpectNoText("/start")
+}
+
+// TestAdminSlashCommandIsNotAvailable проверяет отдельный сценарий бота, чтобы не гонять его вручную.
+func TestAdminSlashCommandIsNotAvailable(t *testing.T) {
+	app := newTestApp(t)
+	user := upsertConsentedUser(t, app)
+
+	NewScenario(t, app, testUser()).
+		Command("/admin").
+		ExpectText("Команда не найдена").
+		ExpectNoButton("Меню админа")
+
+	updated, err := app.userByMaxID(user.MaxUserID)
+	if err != nil {
+		t.Fatalf("load user: %v", err)
+	}
+	if updated == nil || updated.Role != roleInitiator {
+		t.Fatalf("expected initiator role, got %#v", updated)
+	}
+}
+
 // TestCustomDateInputMovesToTimeSelection проверяет отдельный сценарий бота, чтобы не гонять его вручную.
 func TestCustomDateInputMovesToTimeSelection(t *testing.T) {
 	app := newTestApp(t)

@@ -248,7 +248,7 @@ func (app *App) handleBotContext(ctx context.Context, bctx BotContext) error {
 		return app.showRequestCard(ctx, bctx, user, *req)
 	}
 
-	return app.reply(ctx, bctx, "Откройте меню командой /start.", app.mainMenu(user))
+	return app.reply(ctx, bctx, "Выберите действие в меню.", app.mainMenu(user))
 }
 
 // reply отправляет ответ пользователю или сохраняет его в тестовом режиме.
@@ -286,7 +286,7 @@ func (app *App) handleCommand(ctx context.Context, bctx BotContext, user UserRow
 		app.clearSession(user.MaxUserID)
 		return app.reply(ctx, bctx, "Текущий текстовый ввод сброшен.", app.mainMenu(user))
 	}
-	return app.reply(ctx, bctx, "Неизвестная команда. Используйте /start.", mainMenuRows())
+	return app.reply(ctx, bctx, "Команда не найдена. Выберите действие в меню.", app.mainMenu(user))
 }
 
 // showConsent показывает стартовый экран с согласием на обработку данных.
@@ -431,7 +431,7 @@ func (app *App) handleCallback(ctx context.Context, bctx BotContext, user UserRo
 		return app.handleTechCallback(ctx, bctx, user, action, id)
 	}
 
-	return app.reply(ctx, bctx, "Неизвестное действие. Откройте меню командой /start.", mainMenuRows())
+	return app.reply(ctx, bctx, "Неизвестное действие. Вернитесь в главное меню.", mainMenuRows())
 }
 
 // handleDraftCallback ведет кнопочный сценарий создания и правки анкеты.
