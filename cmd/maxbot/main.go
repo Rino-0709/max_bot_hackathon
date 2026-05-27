@@ -45,6 +45,9 @@ func main() {
 	if err := app.initDB(); err != nil {
 		log.Fatalf("init db: %v", err)
 	}
+	if err := app.expireOldRequests(context.Background()); err != nil {
+		log.Printf("expire old requests on startup: %v", err)
+	}
 	if cfg.MetricsAddr != "" {
 		go func() {
 			if err := app.serveMonitoring(context.Background(), cfg.MetricsAddr); err != nil && !errors.Is(err, http.ErrServerClosed) {
