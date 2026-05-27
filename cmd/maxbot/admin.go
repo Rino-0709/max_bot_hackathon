@@ -13,8 +13,11 @@ import (
 )
 
 func (app *App) adminMenu(ctx context.Context, bctx BotContext) error {
+	if err := app.expireOldRequests(ctx); err != nil {
+		log.Printf("expire old requests: %v", err)
+	}
 	var pending, approvedToday int
-	_ = app.queryRow(`SELECT COUNT(*) FROM pass_requests WHERE status = 'pending_review'`).Scan(&pending)
+	_ = app.queryRow(`SELECT COUNT(*) FROM pass_requests WHERE status = 'pending_review' AND visit_date >= ?`, todayMoscow()).Scan(&pending)
 	_ = app.queryRow(`SELECT COUNT(*) FROM pass_requests WHERE visit_date = ? AND status IN ('approved', 'passed')`, todayMoscow()).Scan(&approvedToday)
 	text := fmt.Sprintf("Админ\nНа рассмотрении: %d\nАктивных сегодня: %d", pending, approvedToday)
 	return app.reply(ctx, bctx, text, [][]Button{
@@ -25,8 +28,11 @@ func (app *App) adminMenu(ctx context.Context, bctx BotContext) error {
 }
 
 func (app *App) adminQueue(ctx context.Context, bctx BotContext, mode string, page int) error {
-	where := "pr.status = 'pending_review'"
-	args := []interface{}{}
+	if err := app.expireOldRequests(ctx); err != nil {
+		log.Printf("expire old requests: %v", err)
+	}
+	where := "pr.status = 'pending_review' AND pr.visit_date >= ?"
+	args := []interface{}{todayMoscow()}
 	title := "Очередь заявок"
 	if mode == "approved_today" {
 		where = "pr.visit_date = ? AND pr.status IN ('approved', 'passed')"

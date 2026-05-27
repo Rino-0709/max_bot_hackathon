@@ -61,7 +61,7 @@ func allowedStatusTransition(from, to string) bool {
 	// Статусы специально оформлены как белый список переходов. Так проще
 	// объяснить поведение на защите и сложнее случайно "перепрыгнуть" аудит.
 	allowed := map[string][]string{
-		"pending_review":             {"approved", "rejected", "clarification_requested", "cancelled_by_initiator", "data_erasure_requested"},
+		"pending_review":             {"approved", "rejected", "clarification_requested", "cancelled_by_initiator", "expired", "data_erasure_requested"},
 		"clarification_requested":    {"pending_review", "cancelled_by_initiator", "expired", "data_erasure_requested"},
 		"approved":                   {"passed", "no_show", "closed", "data_erasure_requested"},
 		"passed":                     {"closed"},
@@ -137,7 +137,7 @@ func (app *App) expireOldRequests(ctx context.Context) error {
 		SELECT pr.id, pr.request_number, pr.status, u.max_user_id
 		FROM pass_requests pr
 		JOIN users u ON u.id = pr.user_id
-		WHERE pr.visit_date < ? AND pr.status IN ('approved', 'clarification_requested')
+		WHERE pr.visit_date < ? AND pr.status IN ('pending_review', 'approved', 'clarification_requested')
 	`, todayMoscow())
 	if err != nil {
 		return err
@@ -150,13 +150,16 @@ func (app *App) expireOldRequests(ctx context.Context) error {
 		if err := rows.Scan(&id, &number, &status, &maxUserID); err != nil {
 			return err
 		}
-		next := "no_show"
-		message := "Дата визита прошла, проход не был подтверждён."
-		notify := "Заявка " + number + ": дата визита прошла, проход не был подтверждён."
+		next := "expired"
+		message := "Дата визита прошла, заявка устарела."
+		notify := "Заявка " + number + ": дата визита прошла, заявка устарела."
+		if status == "approved" {
+			message = "Дата визита прошла, проход не был подтверждён."
+			notify = "Заявка " + number + ": дата визита прошла, заявка устарела, проход не был подтверждён."
+		}
 		if status == "clarification_requested" {
-			next = "expired"
 			message = "Дата визита прошла, уточнение не было предоставлено."
-			notify = "Заявка " + number + ": заявка истекла без уточнения."
+			notify = "Заявка " + number + ": заявка устарела без уточнения."
 		}
 		if _, err := app.exec(`UPDATE pass_requests SET status = ?, updated_at = ? WHERE id = ?`, next, nowISO(), id); err != nil {
 			return err

@@ -572,7 +572,8 @@ func TestScenarioInitiatorCreatesPassWithManualDate(t *testing.T) {
 		ExpectText("Заявка отправлена на рассмотрение").
 		ExpectButton("Мои заявки").
 		Click("Мои заявки").
-		ExpectText("Показаны последние 10 заявок").
+		ExpectText("Мои заявки").
+		ExpectText("PASS-").
 		ExpectButton("Назад")
 }
 
@@ -888,7 +889,8 @@ func TestMyRequestsListEndsWithBackButton(t *testing.T) {
 
 	NewScenario(t, app, testUser()).
 		ClickPayload("my:list").
-		ExpectText("Показаны последние 10 заявок").
+		ExpectText("Мои заявки").
+		ExpectText("PASS-").
 		ExpectButton("Назад").
 		ExpectButton("Главное меню")
 }
@@ -1261,8 +1263,9 @@ func TestExpireOldRequestsMarksNoShowAndExpired(t *testing.T) {
 		INSERT INTO pass_requests (request_number, user_id, full_name, visit_date, visit_time, zone_id, visit_purpose, status, created_at, updated_at)
 		VALUES
 			('PASS-OLD-APPROVED', ?, 'Старый Одобренный', ?, '09:00', 1, 'Тест', 'approved', ?, ?),
-			('PASS-OLD-CLARIFY', ?, 'Старый Уточнение', ?, '09:00', 1, 'Тест', 'clarification_requested', ?, ?)
-	`, user.ID, pastDate, now, now, user.ID, pastDate, now, now)
+			('PASS-OLD-CLARIFY', ?, 'Старый Уточнение', ?, '09:00', 1, 'Тест', 'clarification_requested', ?, ?),
+			('PASS-OLD-PENDING', ?, 'Старый На Рассмотрении', ?, '09:00', 1, 'Тест', 'pending_review', ?, ?)
+	`, user.ID, pastDate, now, now, user.ID, pastDate, now, now, user.ID, pastDate, now, now)
 	if err != nil {
 		t.Fatalf("insert old requests: %v", err)
 	}
@@ -1274,6 +1277,12 @@ func TestExpireOldRequestsMarksNoShowAndExpired(t *testing.T) {
 	}
 	if got := requestStatus(t, app, mustRequestByNumber(t, app, "PASS-OLD-CLARIFY").ID); got != "expired" {
 		t.Fatalf("expected expired, got %s", got)
+	}
+	if got := requestStatus(t, app, mustRequestByNumber(t, app, "PASS-OLD-PENDING").ID); got != "expired" {
+		t.Fatalf("expected expired pending request, got %s", got)
+	}
+	if !strings.Contains(lastReply(t, app).Text, "устарела") {
+		t.Fatalf("expected expiration notification, got %q", lastReply(t, app).Text)
 	}
 }
 

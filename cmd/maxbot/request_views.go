@@ -128,17 +128,16 @@ func (app *App) showMyRequests(ctx context.Context, bctx BotContext, user UserRo
 	defer rows.Close()
 
 	found := false
+	var lines []string
+	var buttons [][]Button
 	for rows.Next() {
 		req, err := app.scanRequest(rows)
 		if err != nil {
 			return err
 		}
 		found = true
-		text := fmt.Sprintf("%s - %s\n%s, %s\n%s\nПроходы: %d", req.RequestNumber, statusLabel(req.Status), formatDate(req.VisitDate), req.VisitTime, app.requestZone(*req), app.entryCount(req.ID))
-		if err := app.reply(ctx, bctx, text, [][]Button{{btn("Открыть", fmt.Sprintf("request:open:%d", req.ID), "")}}); err != nil {
-			return err
-		}
-		bctx.CallbackID = ""
+		lines = append(lines, fmt.Sprintf("%s - %s\n%s %s, %s\nПроходы: %d", req.RequestNumber, statusLabel(req.Status), formatDate(req.VisitDate), req.VisitTime, app.requestZone(*req), app.entryCount(req.ID)))
+		buttons = append(buttons, []Button{btn(req.RequestNumber, fmt.Sprintf("request:open:%d", req.ID), "")})
 	}
 	if !found {
 		return app.reply(ctx, bctx, "У вас пока нет заявок.", [][]Button{
@@ -149,9 +148,8 @@ func (app *App) showMyRequests(ctx context.Context, bctx BotContext, user UserRo
 	if err := rows.Err(); err != nil {
 		return err
 	}
-	return app.reply(ctx, bctx, "Показаны последние 10 заявок.", [][]Button{
-		{btn("Назад", "menu", ""), btn("Главное меню", "menu", "")},
-	})
+	buttons = append(buttons, []Button{btn("Назад", "menu", ""), btn("Главное меню", "menu", "")})
+	return app.reply(ctx, bctx, "Мои заявки\n\n"+strings.Join(lines, "\n\n"), buttons)
 }
 
 func (app *App) showMyEntries(ctx context.Context, bctx BotContext, user UserRow) error {
