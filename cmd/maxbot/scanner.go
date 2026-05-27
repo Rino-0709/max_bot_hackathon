@@ -214,6 +214,7 @@ const scannerPageHTML = `<!doctype html>
     button.secondary { background: #e8edf4; color: #17202a; }
     button.positive { background: #197a4d; }
     button:disabled { opacity: .55; cursor: not-allowed; }
+    input[type="file"] { display: none; }
     .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
     .status { padding: 12px; border-radius: 8px; background: #eef3f8; white-space: pre-wrap; }
     .ok { background: #e8f6ef; }
@@ -234,7 +235,9 @@ const scannerPageHTML = `<!doctype html>
       <button id="saveToken" class="secondary">Сохранить ключ</button>
       <button id="startCamera">Включить камеру</button>
       <button id="stopCamera" class="secondary">Остановить</button>
+      <button id="pickPhoto" class="secondary">Загрузить фото QR</button>
     </div>
+    <input id="photoInput" type="file" accept="image/*">
     <div id="cameraWrap" class="camera-wrap">
       <video id="video" playsinline muted></video>
       <div id="scanBadge" class="scan-badge">QR считан</div>
@@ -263,6 +266,7 @@ const confirmButton = document.querySelector('#confirmEntry');
 const video = document.querySelector('#video');
 const cameraWrap = document.querySelector('#cameraWrap');
 const scanBadge = document.querySelector('#scanBadge');
+const photoInput = document.querySelector('#photoInput');
 let lastQR = '';
 let stream = null;
 let scanning = false;
@@ -277,6 +281,8 @@ document.querySelector('#checkManual').onclick = () => verify(manual.value.trim(
 confirmButton.onclick = () => confirmEntry();
 document.querySelector('#startCamera').onclick = () => startCamera();
 document.querySelector('#stopCamera').onclick = () => stopCamera();
+document.querySelector('#pickPhoto').onclick = () => photoInput.click();
+photoInput.onchange = () => scanPhoto(photoInput.files && photoInput.files[0]);
 
 function showStatus(text, ok) {
   statusBox.textContent = text;
@@ -383,6 +389,44 @@ async function scanWithJSQR() {
     }
     await nextFrame();
   }
+}
+
+async function scanPhoto(file) {
+  if (!file) { return; }
+  if (typeof jsQR !== 'function') {
+    showStatus('QR-движок не загрузился. Используйте ручной ввод.', false);
+    return;
+  }
+  const image = new Image();
+  const objectUrl = URL.createObjectURL(file);
+  image.onload = async () => {
+    try {
+      const canvas = document.createElement('canvas');
+      const maxSide = 1600;
+      const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+      canvas.width = Math.max(1, Math.round(image.width * scale));
+      canvas.height = Math.max(1, Math.round(image.height * scale));
+      const ctx = canvas.getContext('2d', {willReadFrequently: true});
+      ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+      const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const code = jsQR(frame.data, frame.width, frame.height, {inversionAttempts: 'attemptBoth'});
+      if (!code || !code.data) {
+        scanFeedback(false, 'QR не найден на фото');
+        showStatus('QR не найден на фото. Попробуйте другое изображение или ручной ввод.', false);
+        return;
+      }
+      await verify(code.data);
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+      photoInput.value = '';
+    }
+  };
+  image.onerror = () => {
+    URL.revokeObjectURL(objectUrl);
+    photoInput.value = '';
+    showStatus('Не удалось открыть изображение.', false);
+  };
+  image.src = objectUrl;
 }
 
 function stopCamera() {

@@ -9,6 +9,7 @@ dist
 data/
 cmd/maxbot/data/
 backups/
+presentation/
 
 # Локальные черновики планирования. Храним на рабочей машине, не в публичном репозитории.
 Architecture and data model draft.txt
