@@ -9,6 +9,7 @@ import (
 	"strings"
 )
 
+// showRequestCard открывает карточку заявки с кнопками для текущей роли.
 func (app *App) showRequestCard(ctx context.Context, bctx BotContext, viewer UserRow, req RequestRow) error {
 	rows := [][]Button{}
 	if req.UserID == viewer.ID && (req.Status == "pending_review" || req.Status == "clarification_requested") {
@@ -35,6 +36,7 @@ func (app *App) showRequestCard(ctx context.Context, bctx BotContext, viewer Use
 	return app.reply(ctx, bctx, app.requestCardText(req), rows)
 }
 
+// requestCardText собирает основной текст карточки заявки.
 func (app *App) requestCardText(req RequestRow) string {
 	lines := []string{
 		"Заявка: " + req.RequestNumber,
@@ -58,6 +60,7 @@ func (app *App) requestCardText(req RequestRow) string {
 	return strings.Join(lines, "\n")
 }
 
+// clarificationSummaryLines достает последний вопрос на уточнение и ответ гостя.
 func (app *App) clarificationSummaryLines(requestID int64) []string {
 	// Показываем последний вопрос и ответ именно на него. Если уточнений было
 	// несколько, старый ответ не должен выглядеть как ответ на новый вопрос.
@@ -101,12 +104,14 @@ func (app *App) clarificationSummaryLines(requestID int64) []string {
 	return lines
 }
 
+// cleanEventText убирает технический префикс из текста события.
 func cleanEventText(value, prefix string) string {
 	text := strings.TrimSpace(value)
 	text = strings.TrimPrefix(text, prefix)
 	return strings.TrimSpace(text)
 }
 
+// showMyRequests показывает гостю его заявки одним компактным списком.
 func (app *App) showMyRequests(ctx context.Context, bctx BotContext, user UserRow) error {
 	if err := app.expireOldRequests(ctx); err != nil {
 		log.Printf("expire old requests: %v", err)
@@ -152,6 +157,7 @@ func (app *App) showMyRequests(ctx context.Context, bctx BotContext, user UserRo
 	return app.reply(ctx, bctx, "Мои заявки\n\n"+strings.Join(lines, "\n\n"), buttons)
 }
 
+// showMyEntries показывает гостю историю его проходов.
 func (app *App) showMyEntries(ctx context.Context, bctx BotContext, user UserRow) error {
 	rows, err := app.query(`
 		SELECT pr.request_number, pr.visit_date, COALESCE(z.short_name, pr.custom_zone_text, 'Не указано'), ee.entry_type, ee.created_at
@@ -181,6 +187,7 @@ func (app *App) showMyEntries(ctx context.Context, bctx BotContext, user UserRow
 	return app.reply(ctx, bctx, strings.Join(lines, "\n\n"), app.mainMenu(user))
 }
 
+// showHistory показывает историю действий по заявке.
 func (app *App) showHistory(ctx context.Context, bctx BotContext, requestID int64) error {
 	rows, err := app.query(`
 		SELECT event_code, public_message, created_at
@@ -213,6 +220,7 @@ func (app *App) showHistory(ctx context.Context, bctx BotContext, requestID int6
 	return app.reply(ctx, bctx, strings.Join(lines, "\n"), mainMenuRows())
 }
 
+// showEntries показывает проходы по выбранной заявке.
 func (app *App) showEntries(ctx context.Context, bctx BotContext, requestID int64) error {
 	rows, err := app.query(`
 		SELECT entry_type, created_at

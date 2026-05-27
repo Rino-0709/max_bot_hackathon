@@ -12,6 +12,7 @@ import (
 	"time"
 )
 
+// newMetrics создает набор счетчиков для Prometheus.
 func newMetrics() *Metrics {
 	return &Metrics{
 		startedAt:    time.Now(),
@@ -19,6 +20,7 @@ func newMetrics() *Metrics {
 	}
 }
 
+// incUpdate увеличивает счетчик событий нужного типа.
 func (m *Metrics) incUpdate(updateType string) {
 	if m == nil {
 		return
@@ -27,6 +29,7 @@ func (m *Metrics) incUpdate(updateType string) {
 	counter.Add(1)
 }
 
+// observeUpdateLag обновляет текущую и максимальную задержку событий MAX.
 func (m *Metrics) observeUpdateLag(lag time.Duration) {
 	if m == nil || lag < 0 {
 		return
@@ -41,6 +44,7 @@ func (m *Metrics) observeUpdateLag(lag time.Duration) {
 	}
 }
 
+// updateCounter лениво создает счетчик для нового типа события MAX.
 func (m *Metrics) updateCounter(updateType string) *atomic.Uint64 {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -55,6 +59,7 @@ func (m *Metrics) updateCounter(updateType string) *atomic.Uint64 {
 	return counter
 }
 
+// updateSnapshot снимает копию счетчиков без долгой блокировки.
 func (m *Metrics) updateSnapshot() map[string]uint64 {
 	result := map[string]uint64{}
 	if m == nil {
@@ -68,22 +73,27 @@ func (m *Metrics) updateSnapshot() map[string]uint64 {
 	return result
 }
 
+// exec выполняет SQL-команду через общий адаптер плейсхолдеров.
 func (app *App) exec(query string, args ...interface{}) (sql.Result, error) {
 	return app.db.Exec(app.sql(query), args...)
 }
 
+// query выполняет SQL-запрос, который возвращает несколько строк.
 func (app *App) query(query string, args ...interface{}) (*sql.Rows, error) {
 	return app.db.Query(app.sql(query), args...)
 }
 
+// queryRow выполняет SQL-запрос, который должен вернуть одну строку.
 func (app *App) queryRow(query string, args ...interface{}) *sql.Row {
 	return app.db.QueryRow(app.sql(query), args...)
 }
 
+// sql адаптирует общий SQL-синтаксис под PostgreSQL.
 func (app *App) sql(query string) string {
 	return rebindPostgres(query)
 }
 
+// rebindPostgres заменяет ? на $1, $2 и не трогает строки внутри SQL.
 func rebindPostgres(query string) string {
 	var out strings.Builder
 	out.Grow(len(query) + 8)
@@ -112,6 +122,7 @@ func rebindPostgres(query string) string {
 	return out.String()
 }
 
+// serveMonitoring поднимает healthcheck и Prometheus-метрики.
 func (app *App) serveMonitoring(ctx context.Context, addr string) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", app.healthHandler)
@@ -133,6 +144,7 @@ func (app *App) serveMonitoring(ctx context.Context, addr string) error {
 	return server.ListenAndServe()
 }
 
+// healthHandler быстро проверяет, живы ли бот и база данных.
 func (app *App) healthHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()
@@ -145,6 +157,7 @@ func (app *App) healthHandler(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte("ok\n"))
 }
 
+// metricsHandler отдает Prometheus-метрики наружу.
 func (app *App) metricsHandler(w http.ResponseWriter, r *http.Request) {
 	metrics, err := app.renderMetrics(r.Context())
 	if err != nil {
@@ -155,6 +168,7 @@ func (app *App) metricsHandler(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(metrics))
 }
 
+// renderMetrics собирает текст всех метрик приложения.
 func (app *App) renderMetrics(ctx context.Context) (string, error) {
 	var out strings.Builder
 	metricStart(&out, "maxbot_build_info", "Static bot build information", "gauge")
@@ -211,6 +225,7 @@ func (app *App) renderMetrics(ctx context.Context) (string, error) {
 	return out.String(), nil
 }
 
+// appendCountMetric добавляет в Prometheus одну числовую метрику из БД.
 func (app *App) appendCountMetric(ctx context.Context, out *strings.Builder, name, help, query string, labels map[string]string) error {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
@@ -223,6 +238,7 @@ func (app *App) appendCountMetric(ctx context.Context, out *strings.Builder, nam
 	return nil
 }
 
+// appendRequestStatusMetrics выводит количество заявок по статусам.
 func (app *App) appendRequestStatusMetrics(ctx context.Context, out *strings.Builder) error {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
@@ -243,6 +259,7 @@ func (app *App) appendRequestStatusMetrics(ctx context.Context, out *strings.Bui
 	return rows.Err()
 }
 
+// metricStart пишет заголовок HELP/TYPE для метрики.
 func metricStart(out *strings.Builder, name, help, metricType string) {
 	out.WriteString("# HELP ")
 	out.WriteString(name)
@@ -256,6 +273,7 @@ func metricStart(out *strings.Builder, name, help, metricType string) {
 	out.WriteByte('\n')
 }
 
+// metricLine пишет одну строку значения метрики Prometheus.
 func metricLine(out *strings.Builder, name string, labels map[string]string, value float64) {
 	out.WriteString(name)
 	if len(labels) > 0 {
@@ -282,6 +300,7 @@ func metricLine(out *strings.Builder, name string, labels map[string]string, val
 	out.WriteByte('\n')
 }
 
+// escapeMetricLabel экранирует кавычки и переносы в label Prometheus.
 func escapeMetricLabel(value string) string {
 	value = strings.ReplaceAll(value, `\`, `\\`)
 	value = strings.ReplaceAll(value, "\n", `\n`)
@@ -289,6 +308,7 @@ func escapeMetricLabel(value string) string {
 	return value
 }
 
+// updateTypeLabel переводит технический тип MAX-события в понятное имя.
 func updateTypeLabel(updateType string) string {
 	labels := map[string]string{
 		"message_created":  "сообщения пользователей",

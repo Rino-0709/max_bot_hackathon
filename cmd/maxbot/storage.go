@@ -8,6 +8,7 @@ import (
 	"strings"
 )
 
+// initDB создает таблицы и мягко докатывает схему при старте.
 func (app *App) initDB() error {
 	// Миграции здесь намеренно простые и идемпотентные: на хакатонном стенде
 	// бот должен поднимать пустую базу сам, без отдельной команды DBA.
@@ -138,6 +139,7 @@ func (app *App) initDB() error {
 	return nil
 }
 
+// upsertUser сохраняет пользователя MAX и обновляет его отображаемое имя.
 func (app *App) upsertUser(maxUser MaxUser) (UserRow, error) {
 	role := roleInitiator
 	if app.cfg.AdminIDs[maxUser.UserID] {
@@ -172,6 +174,7 @@ func (app *App) upsertUser(maxUser MaxUser) (UserRow, error) {
 	return user, err
 }
 
+// userByMaxID ищет локального пользователя по MAX user id.
 func (app *App) userByMaxID(maxUserID int64) (*UserRow, error) {
 	var user UserRow
 	err := app.queryRow(`SELECT id, max_user_id, display_name, role FROM users WHERE max_user_id = ?`, maxUserID).
@@ -185,25 +188,30 @@ func (app *App) userByMaxID(maxUserID int64) (*UserRow, error) {
 	return &user, nil
 }
 
+// hasConsent проверяет наличие актуального согласия пользователя.
 func (app *App) hasConsent(userID int64) bool {
 	var ok int
 	_ = app.queryRow(`SELECT 1 FROM consents WHERE user_id = ? AND document_version = ? AND scope = 'profile_and_pass_requests'`, userID, app.cfg.PolicyVersion).Scan(&ok)
 	return ok == 1
 }
 
+// isAdmin проверяет, доступны ли пользователю админские функции.
 func (app *App) isAdmin(user UserRow) bool {
 	return user.Role == roleAdmin || user.Role == roleTechAdmin
 }
 
+// isTechAdmin проверяет, доступны ли пользователю техадминские функции.
 func (app *App) isTechAdmin(user UserRow) bool {
 	return user.Role == roleTechAdmin
 }
 
+// setRole назначает пользователю новую роль.
 func (app *App) setRole(maxUserID int64, role string) error {
 	_, err := app.exec(`UPDATE users SET role = ? WHERE max_user_id = ?`, role, maxUserID)
 	return err
 }
 
+// getDraft возвращает текущий черновик анкеты пользователя.
 func (app *App) getDraft(userID int64) (*DraftRow, error) {
 	row := app.queryRow(`
 		SELECT id, user_id, full_name, visit_date, visit_time, zone_id, custom_zone_text, visit_purpose, extra_fields_json
@@ -217,6 +225,7 @@ func (app *App) getDraft(userID int64) (*DraftRow, error) {
 	return &draft, err
 }
 
+// ensureDraft создает пустой черновик, если пользователь только начал анкету.
 func (app *App) ensureDraft(userID int64) error {
 	_, err := app.exec(`
 		INSERT INTO draft_requests (user_id, created_at, updated_at)
@@ -226,6 +235,7 @@ func (app *App) ensureDraft(userID int64) error {
 	return err
 }
 
+// updateDraft обновляет только те поля черновика, которые реально изменились.
 func (app *App) updateDraft(userID int64, values map[string]interface{}) error {
 	if len(values) == 0 {
 		return nil
@@ -248,10 +258,12 @@ func (app *App) updateDraft(userID int64, values map[string]interface{}) error {
 	return err
 }
 
+// deleteDraft удаляет черновик после отправки или отказа от анкеты.
 func (app *App) deleteDraft(userID int64) {
 	_, _ = app.exec(`DELETE FROM draft_requests WHERE user_id = ?`, userID)
 }
 
+// createPassRequest превращает заполненный черновик в заявку.
 func (app *App) createPassRequest(user UserRow) (string, error) {
 	draft, err := app.getDraft(user.ID)
 	if err != nil {
@@ -319,6 +331,7 @@ func (app *App) createPassRequest(user UserRow) (string, error) {
 	return number, nil
 }
 
+// makeRequestNumber генерирует короткий читаемый номер заявки.
 func (app *App) makeRequestNumber() string {
 	alphabet := []rune("23456789ABCDEFGHJKLMNPQRSTUVWXYZ")
 	var suffix strings.Builder
@@ -328,12 +341,14 @@ func (app *App) makeRequestNumber() string {
 	return "PASS-" + strings.ReplaceAll(todayMoscow(), "-", "") + "-" + suffix.String()
 }
 
+// requestNumberExists проверяет, не занят ли сгенерированный номер.
 func (app *App) requestNumberExists(number string) bool {
 	var ok int
 	_ = app.queryRow(`SELECT 1 FROM pass_requests WHERE request_number = ?`, number).Scan(&ok)
 	return ok == 1
 }
 
+// requestByID загружает заявку по внутреннему id.
 func (app *App) requestByID(id int64) (*RequestRow, error) {
 	return app.scanRequest(app.queryRow(`
 		SELECT pr.id, pr.request_number, pr.user_id, pr.full_name, pr.visit_date, pr.visit_time,
@@ -346,6 +361,7 @@ func (app *App) requestByID(id int64) (*RequestRow, error) {
 	`, id))
 }
 
+// requestByNumber ищет заявку по полному номеру или последним символам.
 func (app *App) requestByNumber(number string) (*RequestRow, error) {
 	query := strings.TrimSpace(number)
 	return app.scanRequest(app.queryRow(`
@@ -365,6 +381,7 @@ type rowScanner interface {
 	Scan(dest ...interface{}) error
 }
 
+// scanRequest читает заявку из SQL-строки в RequestRow.
 func (app *App) scanRequest(row rowScanner) (*RequestRow, error) {
 	var req RequestRow
 	err := row.Scan(&req.ID, &req.RequestNumber, &req.UserID, &req.FullName, &req.VisitDate, &req.VisitTime, &req.ZoneID, &req.CustomZoneText, &req.VisitPurpose, &req.ExtraFieldsJSON, &req.Status, &req.PublicComment, &req.DisplayName, &req.MaxUserID, &req.ZoneName, &req.ZoneAddress, &req.CreatedAt, &req.UpdatedAt)

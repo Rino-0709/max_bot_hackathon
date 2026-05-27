@@ -10,6 +10,7 @@ import (
 	"time"
 )
 
+// poll забирает события MAX и передает их в обработку.
 func (app *App) poll(ctx context.Context) error {
 	var marker int64
 	for {
@@ -57,6 +58,7 @@ func (app *App) poll(ctx context.Context) error {
 	}
 }
 
+// observePoll сохраняет размер пачки, длительность polling и задержку событий.
 func (app *App) observePoll(updates []Update, pollDuration time.Duration) {
 	if app.metrics != nil {
 		app.metrics.lastPollDurationMillis.Store(uint64(pollDuration.Milliseconds()))
@@ -86,6 +88,7 @@ func (app *App) observePoll(updates []Update, pollDuration time.Duration) {
 	}
 }
 
+// updateLag считает задержку между событием MAX и обработкой у нас.
 func updateLag(update Update) (time.Duration, bool) {
 	timestamp := update.Timestamp
 	if timestamp == 0 && update.Callback != nil {
@@ -111,6 +114,7 @@ func updateLag(update Update) (time.Duration, bool) {
 	return lag, true
 }
 
+// groupUpdatesByUser группирует события по пользователям, сохраняя порядок внутри одного чата.
 func groupUpdatesByUser(updates []Update) [][]Update {
 	groups := make([][]Update, 0)
 	index := map[int64]int{}
@@ -131,6 +135,7 @@ func groupUpdatesByUser(updates []Update) [][]Update {
 	return groups
 }
 
+// updateUserID достает пользователя из события MAX независимо от его типа.
 func updateUserID(update Update) int64 {
 	switch update.UpdateType {
 	case "message_created":
@@ -149,6 +154,7 @@ func updateUserID(update Update) int64 {
 	return 0
 }
 
+// handleUpdate приводит сырое событие MAX к внутреннему контексту бота.
 func (app *App) handleUpdate(ctx context.Context, update Update) error {
 	switch update.UpdateType {
 	case "bot_started":
@@ -177,6 +183,7 @@ func (app *App) handleUpdate(ctx context.Context, update Update) error {
 	return nil
 }
 
+// skipDuplicateStart отсекает повторный /start, если MAX прислал его дважды подряд.
 func (app *App) skipDuplicateStart(maxUserID int64) bool {
 	app.startMu.Lock()
 	defer app.startMu.Unlock()
@@ -191,6 +198,7 @@ func (app *App) skipDuplicateStart(maxUserID int64) bool {
 	return false
 }
 
+// handleBotContext ведет общий сценарий обработки текста и кнопок.
 func (app *App) handleBotContext(ctx context.Context, bctx BotContext) error {
 	user, err := app.upsertUser(bctx.User)
 	if err != nil {
@@ -243,6 +251,7 @@ func (app *App) handleBotContext(ctx context.Context, bctx BotContext) error {
 	return app.reply(ctx, bctx, "Откройте меню командой /start.", app.mainMenu(user))
 }
 
+// reply отправляет ответ пользователю или сохраняет его в тестовом режиме.
 func (app *App) reply(ctx context.Context, bctx BotContext, text string, rows [][]Button) error {
 	if app.metrics != nil {
 		app.metrics.repliesTotal.Add(1)
@@ -257,6 +266,7 @@ func (app *App) reply(ctx context.Context, bctx BotContext, text string, rows []
 	return app.api.SendToUser(ctx, bctx.User.UserID, text, rows)
 }
 
+// handleCommand обрабатывает /start и служебный bootstrap-код.
 func (app *App) handleCommand(ctx context.Context, bctx BotContext, user UserRow) error {
 	fields := strings.Fields(bctx.Text)
 	command := fields[0]
@@ -288,6 +298,7 @@ func (app *App) handleCommand(ctx context.Context, bctx BotContext, user UserRow
 	return app.reply(ctx, bctx, "Неизвестная команда. Используйте /start.", mainMenuRows())
 }
 
+// showConsent показывает стартовый экран с согласием на обработку данных.
 func (app *App) showConsent(ctx context.Context, bctx BotContext, user UserRow) error {
 	text := strings.Join([]string{
 		"Весенний_код_1",
@@ -308,6 +319,7 @@ func (app *App) showConsent(ctx context.Context, bctx BotContext, user UserRow) 
 	})
 }
 
+// mainMenu собирает кнопки главного меню с учетом роли пользователя.
 func (app *App) mainMenu(user UserRow) [][]Button {
 	rows := [][]Button{
 		{btn("Создать пропуск", "draft:start", "positive")},
@@ -323,26 +335,32 @@ func (app *App) mainMenu(user UserRow) [][]Button {
 	return rows
 }
 
+// btn создает inline-кнопку MAX в короткой записи.
 func btn(text, payload, intent string) Button {
 	return Button{Type: "callback", Text: text, Payload: payload, Intent: intent}
 }
 
+// mainMenuRows возвращает стандартную кнопку выхода в главное меню.
 func mainMenuRows() [][]Button {
 	return [][]Button{{btn("Главное меню", "menu", "")}}
 }
 
+// adminBackRows возвращает кнопки возврата для админских экранов.
 func adminBackRows() [][]Button {
 	return [][]Button{{btn("Меню админа", "admin:menu", ""), btn("Главное меню", "menu", "")}}
 }
 
+// techBackRows возвращает кнопки возврата для техадминских экранов.
 func techBackRows() [][]Button {
 	return [][]Button{{btn("Меню тех админа", "tech:menu", ""), btn("Главное меню", "menu", "")}}
 }
 
+// draftBackRows возвращает кнопки назад и в меню во время заполнения анкеты.
 func draftBackRows(backPayload string) [][]Button {
 	return [][]Button{{btn("Назад", backPayload, ""), btn("Главное меню", "menu", "")}}
 }
 
+// dateInputBackPayload выбирает правильный возврат для ручного ввода даты.
 func dateInputBackPayload(session Session) string {
 	if session.Data["mode"] == "edit" {
 		return "draft:edit"
@@ -350,6 +368,7 @@ func dateInputBackPayload(session Session) string {
 	return "draft:back_full_name"
 }
 
+// timeInputBackPayload выбирает правильный возврат для ручного ввода времени.
 func timeInputBackPayload(session Session) string {
 	if session.Data["mode"] == "edit" {
 		return "draft:edit"
@@ -357,6 +376,7 @@ func timeInputBackPayload(session Session) string {
 	return "draft:back_date"
 }
 
+// parsePayload разбирает callback payload на раздел, действие и id.
 func parsePayload(payload string) (scope, action, id, extra string) {
 	scope, rest, ok := strings.Cut(payload, ":")
 	if !ok {
@@ -373,6 +393,7 @@ func parsePayload(payload string) (scope, action, id, extra string) {
 	return scope, action, rest, ""
 }
 
+// handleCallback отправляет нажатие кнопки в нужный обработчик.
 func (app *App) handleCallback(ctx context.Context, bctx BotContext, user UserRow) error {
 	if bctx.Payload == "consent:accept" {
 		_, err := app.exec(`
@@ -422,6 +443,7 @@ func (app *App) handleCallback(ctx context.Context, bctx BotContext, user UserRo
 	return app.reply(ctx, bctx, "Неизвестное действие. Откройте меню командой /start.", mainMenuRows())
 }
 
+// handleDraftCallback ведет кнопочный сценарий создания и правки анкеты.
 func (app *App) handleDraftCallback(ctx context.Context, bctx BotContext, user UserRow, action, id string) error {
 	switch action {
 	case "start":
@@ -564,6 +586,7 @@ func (app *App) handleDraftCallback(ctx context.Context, bctx BotContext, user U
 	return app.reply(ctx, bctx, "Неизвестное действие черновика.", mainMenuRows())
 }
 
+// showDataPolicy показывает, какие данные бот хранит и зачем.
 func (app *App) showDataPolicy(ctx context.Context, bctx BotContext, user UserRow) error {
 	text := strings.Join([]string{
 		"Политика данных",
@@ -597,6 +620,7 @@ func (app *App) showDataPolicy(ctx context.Context, bctx BotContext, user UserRo
 	return app.reply(ctx, bctx, text, rows)
 }
 
+// handleDataCallback обрабатывает согласие, отзыв и просмотр правил.
 func (app *App) handleDataCallback(ctx context.Context, bctx BotContext, user UserRow, action string) error {
 	switch action {
 	case "policy":
@@ -617,6 +641,7 @@ func (app *App) handleDataCallback(ctx context.Context, bctx BotContext, user Us
 	return app.reply(ctx, bctx, "Неизвестное действие с данными.", mainMenuRows())
 }
 
+// withdrawConsent отзывает согласие и обезличивает персональные поля заявок.
 func (app *App) withdrawConsent(ctx context.Context, user UserRow) error {
 	_ = ctx
 	app.deleteDraft(user.ID)
@@ -644,6 +669,7 @@ func (app *App) withdrawConsent(ctx context.Context, user UserRow) error {
 	return nil
 }
 
+// continueDraft продолжает черновик с того места, где пользователь остановился.
 func (app *App) continueDraft(ctx context.Context, bctx BotContext, user UserRow) error {
 	draft, err := app.getDraft(user.ID)
 	if err != nil {
@@ -676,6 +702,7 @@ func (app *App) continueDraft(ctx context.Context, bctx BotContext, user UserRow
 	return app.askNextExtraFieldOrSummary(ctx, bctx, user)
 }
 
+// askDate предлагает быстрый выбор даты посещения.
 func (app *App) askDate(ctx context.Context, bctx BotContext, user UserRow) error {
 	today := todayMoscow()
 	return app.reply(ctx, bctx, "Выберите дату посещения.", [][]Button{
@@ -685,6 +712,7 @@ func (app *App) askDate(ctx context.Context, bctx BotContext, user UserRow) erro
 	})
 }
 
+// askDateForEdit просит новую дату при редактировании анкеты.
 func (app *App) askDateForEdit(ctx context.Context, bctx BotContext) error {
 	today := todayMoscow()
 	return app.reply(ctx, bctx, "Выберите новую дату посещения.", [][]Button{
@@ -694,6 +722,7 @@ func (app *App) askDateForEdit(ctx context.Context, bctx BotContext) error {
 	})
 }
 
+// setDraftDate сохраняет дату и перепроверяет время, если оно уже выбрано.
 func (app *App) setDraftDate(ctx context.Context, bctx BotContext, user UserRow, date string) error {
 	if err := validateDate(date); err != nil {
 		return app.reply(ctx, bctx, err.Error(), draftBackRows("draft:back_full_name"))
@@ -708,6 +737,7 @@ func (app *App) setDraftDate(ctx context.Context, bctx BotContext, user UserRow,
 	return app.askTime(ctx, bctx)
 }
 
+// askTime предлагает кнопки с доступным временем посещения.
 func (app *App) askTime(ctx context.Context, bctx BotContext) error {
 	return app.reply(ctx, bctx, "Во сколько планируете прийти?", [][]Button{
 		{btn("09:00", "draft:time:09:00", ""), btn("11:00", "draft:time:11:00", ""), btn("13:00", "draft:time:13:00", "")},
@@ -716,6 +746,7 @@ func (app *App) askTime(ctx context.Context, bctx BotContext) error {
 	})
 }
 
+// askTimeForEdit просит новое время при редактировании анкеты.
 func (app *App) askTimeForEdit(ctx context.Context, bctx BotContext) error {
 	return app.reply(ctx, bctx, "Во сколько планируете прийти?", [][]Button{
 		{btn("09:00", "draft:set_time_summary:09:00", ""), btn("11:00", "draft:set_time_summary:11:00", ""), btn("13:00", "draft:set_time_summary:13:00", "")},
@@ -724,6 +755,7 @@ func (app *App) askTimeForEdit(ctx context.Context, bctx BotContext) error {
 	})
 }
 
+// askZone предлагает выбрать корпус посещения.
 func (app *App) askZone(ctx context.Context, bctx BotContext) error {
 	rows, err := app.zoneButtons()
 	if err != nil {
@@ -734,6 +766,7 @@ func (app *App) askZone(ctx context.Context, bctx BotContext) error {
 	return app.reply(ctx, bctx, "Выберите корпус/зону посещения.", rows)
 }
 
+// askZoneForEdit просит новый корпус при редактировании анкеты.
 func (app *App) askZoneForEdit(ctx context.Context, bctx BotContext) error {
 	rows, err := app.zoneButtonsWithAction("set_zone_summary")
 	if err != nil {
@@ -744,6 +777,7 @@ func (app *App) askZoneForEdit(ctx context.Context, bctx BotContext) error {
 	return app.reply(ctx, bctx, "Выберите новый корпус/зону посещения.", rows)
 }
 
+// showDraftSummary показывает сводку анкеты перед отправкой.
 func (app *App) showDraftSummary(ctx context.Context, bctx BotContext, user UserRow) error {
 	draft, err := app.getDraft(user.ID)
 	if err != nil {
@@ -777,6 +811,7 @@ func (app *App) showDraftSummary(ctx context.Context, bctx BotContext, user User
 	})
 }
 
+// handleRequestCallback обрабатывает действия гостя с его заявкой.
 func (app *App) handleRequestCallback(ctx context.Context, bctx BotContext, user UserRow, action, id string) error {
 	requestID, _ := strconv.ParseInt(id, 10, 64)
 	req, err := app.requestByID(requestID)
@@ -817,6 +852,7 @@ func (app *App) handleRequestCallback(ctx context.Context, bctx BotContext, user
 	return app.reply(ctx, bctx, "Неизвестное действие заявки.", mainMenuRows())
 }
 
+// handleAdminCallback обрабатывает действия администратора с заявками.
 func (app *App) handleAdminCallback(ctx context.Context, bctx BotContext, user UserRow, action, id, extra string) error {
 	if !app.isAdmin(user) {
 		return app.reply(ctx, bctx, "Недоступно.", mainMenuRows())
@@ -891,6 +927,7 @@ func (app *App) handleAdminCallback(ctx context.Context, bctx BotContext, user U
 	return app.reply(ctx, bctx, "Неизвестное действие администратора.", adminBackRows())
 }
 
+// handleTechCallback обрабатывает действия техадмина.
 func (app *App) handleTechCallback(ctx context.Context, bctx BotContext, user UserRow, action, id string) error {
 	if !app.isTechAdmin(user) {
 		return app.reply(ctx, bctx, "Недоступно.", mainMenuRows())
@@ -942,6 +979,7 @@ func (app *App) handleTechCallback(ctx context.Context, bctx BotContext, user Us
 	return app.reply(ctx, bctx, "Неизвестное действие техадмина.", techBackRows())
 }
 
+// handleSessionText принимает текст, который бот ждал на текущем шаге.
 func (app *App) handleSessionText(ctx context.Context, bctx BotContext, user UserRow, session Session) error {
 	text := strings.TrimSpace(bctx.Text)
 	if text == "" {
@@ -1104,6 +1142,7 @@ func (app *App) handleSessionText(ctx context.Context, bctx BotContext, user Use
 	return app.reply(ctx, bctx, "Не удалось обработать ввод. Используйте /reset_session.", mainMenuRows())
 }
 
+// tryRecoverDraftInput подхватывает ввод анкеты, если сессия не успела сохраниться.
 func (app *App) tryRecoverDraftInput(ctx context.Context, bctx BotContext, user UserRow) (bool, error) {
 	if bctx.Text == "" {
 		return false, nil

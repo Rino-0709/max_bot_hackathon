@@ -17,6 +17,7 @@ import (
 	"time"
 )
 
+// GetUpdates получает пачку событий MAX через long polling.
 func (api *MaxAPI) GetUpdates(ctx context.Context, marker int64) (UpdateResponse, error) {
 	query := url.Values{}
 	query.Set("limit", "100")
@@ -31,12 +32,14 @@ func (api *MaxAPI) GetUpdates(ctx context.Context, marker int64) (UpdateResponse
 	return out, err
 }
 
+// SendToUser отправляет обычное сообщение пользователю MAX.
 func (api *MaxAPI) SendToUser(ctx context.Context, userID int64, text string, rows [][]Button) error {
 	query := url.Values{}
 	query.Set("user_id", strconv.FormatInt(userID, 10))
 	return api.send(ctx, "/messages?"+query.Encode(), text, rows)
 }
 
+// SendFileToUser загружает файл и отправляет его пользователю.
 func (api *MaxAPI) SendFileToUser(ctx context.Context, userID int64, text, fileName string, content []byte) error {
 	info, err := api.UploadFile(ctx, fileName, content)
 	if err != nil {
@@ -45,6 +48,7 @@ func (api *MaxAPI) SendFileToUser(ctx context.Context, userID int64, text, fileN
 	return api.SendUploadedFileToUser(ctx, userID, text, info)
 }
 
+// SendUploadedFileToUser отправляет пользователю уже загруженный в MAX файл.
 func (api *MaxAPI) SendUploadedFileToUser(ctx context.Context, userID int64, text string, info UploadedInfo) error {
 	query := url.Values{}
 	query.Set("user_id", strconv.FormatInt(userID, 10))
@@ -88,6 +92,7 @@ func (api *MaxAPI) SendUploadedFileToUser(ctx context.Context, userID int64, tex
 	return lastErr
 }
 
+// UploadFile отправляет файл в MAX и возвращает данные вложения.
 func (api *MaxAPI) UploadFile(ctx context.Context, fileName string, content []byte) (UploadedInfo, error) {
 	query := url.Values{}
 	query.Set("type", "file")
@@ -134,6 +139,7 @@ func (api *MaxAPI) UploadFile(ctx context.Context, fileName string, content []by
 	return info, nil
 }
 
+// isAttachmentNotReady понимает, что MAX еще не успел подготовить файл.
 func isAttachmentNotReady(err error) bool {
 	if err == nil {
 		return false
@@ -142,6 +148,7 @@ func isAttachmentNotReady(err error) bool {
 	return strings.Contains(text, "attachment.not.ready") || strings.Contains(text, "file.not.processed")
 }
 
+// AnswerCallback отвечает на нажатие inline-кнопки.
 func (api *MaxAPI) AnswerCallback(ctx context.Context, callbackID, text string, rows [][]Button) error {
 	query := url.Values{}
 	query.Set("callback_id", callbackID)
@@ -151,11 +158,13 @@ func (api *MaxAPI) AnswerCallback(ctx context.Context, callbackID, text string, 
 	return api.request(ctx, http.MethodPost, "/answers?"+query.Encode(), body, nil)
 }
 
+// send отправляет сообщение в MAX по готовому API-пути.
 func (api *MaxAPI) send(ctx context.Context, path, text string, rows [][]Button) error {
 	body := messageBody(text, rows)
 	return api.request(ctx, http.MethodPost, path, body, nil)
 }
 
+// messageBody собирает текст, markdown и кнопки в формат MAX API.
 func messageBody(text string, rows [][]Button) SendMessageBody {
 	body := SendMessageBody{Text: text}
 	if len(rows) > 0 {
@@ -169,6 +178,7 @@ func messageBody(text string, rows [][]Button) SendMessageBody {
 	return body
 }
 
+// request выполняет HTTP-запрос к MAX API и разбирает ответ.
 func (api *MaxAPI) request(ctx context.Context, method, path string, body interface{}, out interface{}) error {
 	var reader io.Reader
 	if body != nil {

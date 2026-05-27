@@ -8,6 +8,7 @@ import (
 	"strings"
 )
 
+// techMenu открывает панель технического администратора.
 func (app *App) techMenu(ctx context.Context, bctx BotContext) error {
 	var zones, extraFields int
 	_ = app.queryRow(`SELECT COUNT(*) FROM zones WHERE is_active = 1`).Scan(&zones)
@@ -21,6 +22,7 @@ func (app *App) techMenu(ctx context.Context, bctx BotContext) error {
 	})
 }
 
+// showZones показывает список корпусов и их состояние.
 func (app *App) showZones(ctx context.Context, bctx BotContext) error {
 	rows, err := app.query(`SELECT id, code, short_name, address, is_active, sort_order FROM zones ORDER BY sort_order ASC, short_name ASC`)
 	if err != nil {
@@ -48,6 +50,7 @@ func (app *App) showZones(ctx context.Context, bctx BotContext) error {
 	return app.reply(ctx, bctx, strings.Join(lines, "\n"), buttons)
 }
 
+// showAdmins показывает список пользователей с выбранной ролью.
 func (app *App) showAdmins(ctx context.Context, bctx BotContext, role string) error {
 	title := "Обычные админы"
 	if role == roleTechAdmin {
@@ -88,6 +91,7 @@ func (app *App) showAdmins(ctx context.Context, bctx BotContext, role string) er
 	return app.reply(ctx, bctx, title+"\n\n"+strings.Join(lines, "\n"), buttons)
 }
 
+// showAdminDetails показывает карточку администратора и действия с ним.
 func (app *App) showAdminDetails(ctx context.Context, bctx BotContext, maxUserID int64) error {
 	user, err := app.userByMaxID(maxUserID)
 	if err != nil {
@@ -122,6 +126,7 @@ func (app *App) showAdminDetails(ctx context.Context, bctx BotContext, maxUserID
 	return app.reply(ctx, bctx, text, rows)
 }
 
+// showAdminAudit показывает последние действия выбранного администратора.
 func (app *App) showAdminAudit(ctx context.Context, bctx BotContext, maxUserID int64) error {
 	if bctx.CallbackID != "" {
 		if app.api != nil {
@@ -181,6 +186,7 @@ func (app *App) showAdminAudit(ctx context.Context, bctx BotContext, maxUserID i
 	})
 }
 
+// revokeAdmin снимает роль администратора и пишет это в аудит.
 func (app *App) revokeAdmin(ctx context.Context, bctx BotContext, actor UserRow, maxUserID int64) error {
 	user, err := app.userByMaxID(maxUserID)
 	if err != nil {
@@ -205,6 +211,7 @@ func (app *App) revokeAdmin(ctx context.Context, bctx BotContext, actor UserRow,
 	return app.reply(ctx, bctx, fmt.Sprintf("Роль администратора отозвана у пользователя %d.", maxUserID), techBackRows())
 }
 
+// grantAdminFromText выдает роль администратора по введенному MAX user id.
 func (app *App) grantAdminFromText(ctx context.Context, bctx BotContext, actor UserRow, text string) error {
 	targetID, err := strconv.ParseInt(strings.TrimSpace(text), 10, 64)
 	if err != nil || targetID <= 0 {
@@ -238,10 +245,12 @@ func (app *App) grantAdminFromText(ctx context.Context, bctx BotContext, actor U
 	return app.reply(ctx, bctx, fmt.Sprintf("Роль администратора выдана пользователю %d.", targetID), techBackRows())
 }
 
+// zoneButtons собирает кнопки активных корпусов для анкеты.
 func (app *App) zoneButtons() ([][]Button, error) {
 	return app.zoneButtonsWithAction("zone")
 }
 
+// zoneButtonsWithAction собирает кнопки корпусов с нужным callback-действием.
 func (app *App) zoneButtonsWithAction(action string) ([][]Button, error) {
 	rows, err := app.query(`SELECT id, short_name FROM zones WHERE is_active = 1 ORDER BY sort_order ASC, short_name ASC`)
 	if err != nil {
@@ -260,6 +269,7 @@ func (app *App) zoneButtonsWithAction(action string) ([][]Button, error) {
 	return result, rows.Err()
 }
 
+// zoneName возвращает название корпуса по id.
 func (app *App) zoneName(id int64) string {
 	var name string
 	if err := app.queryRow(`SELECT short_name FROM zones WHERE id = ?`, id).Scan(&name); err != nil {
@@ -268,6 +278,7 @@ func (app *App) zoneName(id int64) string {
 	return name
 }
 
+// requestZone выбирает корпус заявки из справочника или свободного текста.
 func (app *App) requestZone(req RequestRow) string {
 	if req.ZoneName.Valid && req.ZoneName.String != "" {
 		return req.ZoneName.String

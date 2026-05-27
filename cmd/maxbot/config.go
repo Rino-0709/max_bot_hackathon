@@ -11,6 +11,7 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
+// loadDotEnv читает локальный .env без внешних библиотек, чтобы запуск был простым.
 func loadDotEnv(path string) error {
 	content, err := os.ReadFile(path)
 	if err != nil {
@@ -31,6 +32,7 @@ func loadDotEnv(path string) error {
 	return nil
 }
 
+// loadConfig собирает настройки бота из переменных окружения.
 func loadConfig() Config {
 	return Config{
 		Token:              os.Getenv("BOT_TOKEN"),
@@ -45,6 +47,7 @@ func loadConfig() Config {
 	}
 }
 
+// openDatabase открывает PostgreSQL и сразу проверяет соединение.
 func openDatabase(cfg Config) (*sql.DB, error) {
 	driver := strings.ToLower(strings.TrimSpace(cfg.DBDriver))
 	if driver == "" {
@@ -61,6 +64,7 @@ func openDatabase(cfg Config) (*sql.DB, error) {
 	}
 }
 
+// getEnv берет значение из окружения, а если его нет — возвращает дефолт.
 func getEnv(key, fallback string) string {
 	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
 		return value
@@ -68,6 +72,7 @@ func getEnv(key, fallback string) string {
 	return fallback
 }
 
+// parseIDSet разбирает список MAX user id из .env.
 func parseIDSet(value string) map[int64]bool {
 	result := map[int64]bool{}
 	for _, part := range strings.Split(value, ",") {

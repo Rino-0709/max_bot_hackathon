@@ -10,6 +10,7 @@ import (
 	"time"
 )
 
+// displayName выбирает имя из профиля MAX, а если его нет — делает запасное.
 func displayName(user MaxUser) string {
 	if strings.TrimSpace(user.Name) != "" {
 		return strings.TrimSpace(user.Name)
@@ -20,10 +21,12 @@ func displayName(user MaxUser) string {
 	return fmt.Sprintf("MAX %d", user.UserID)
 }
 
+// nowISO возвращает текущее время в формате для хранения.
 func nowISO() string {
 	return time.Now().UTC().Format(time.RFC3339)
 }
 
+// moscowLocation возвращает московскую временную зону проекта.
 func moscowLocation() *time.Location {
 	loc, err := time.LoadLocation("Europe/Moscow")
 	if err != nil {
@@ -32,14 +35,17 @@ func moscowLocation() *time.Location {
 	return loc
 }
 
+// moscowNow возвращает текущее время по Москве.
 func moscowNow() time.Time {
 	return time.Now().In(moscowLocation())
 }
 
+// todayMoscow возвращает сегодняшнюю дату по Москве.
 func todayMoscow() string {
 	return moscowNow().Format("2006-01-02")
 }
 
+// addDays прибавляет к дате нужное количество дней.
 func addDays(date string, days int) string {
 	t, err := time.Parse("2006-01-02", date)
 	if err != nil {
@@ -48,6 +54,7 @@ func addDays(date string, days int) string {
 	return t.AddDate(0, 0, days).Format("2006-01-02")
 }
 
+// formatDate показывает дату в привычном виде ДД.ММ.ГГГГ.
 func formatDate(date string) string {
 	t, err := time.Parse("2006-01-02", date)
 	if err != nil {
@@ -56,6 +63,7 @@ func formatDate(date string) string {
 	return t.Format("02.01.2006")
 }
 
+// formatDateTime показывает дату и время из БД в читаемом виде.
 func formatDateTime(value string) string {
 	t, err := time.Parse(time.RFC3339, value)
 	if err != nil {
@@ -64,6 +72,7 @@ func formatDateTime(value string) string {
 	return t.In(moscowLocation()).Format("02.01.2006 15:04")
 }
 
+// nullText возвращает строку из nullable-поля или пустое значение.
 func nullText(value sql.NullString) string {
 	if value.Valid && value.String != "" {
 		return value.String
@@ -71,6 +80,7 @@ func nullText(value sql.NullString) string {
 	return "не указано"
 }
 
+// nullableIntArg готовит nullable-число для SQL.
 func nullableIntArg(value sql.NullInt64) interface{} {
 	if value.Valid {
 		return value.Int64
@@ -78,6 +88,7 @@ func nullableIntArg(value sql.NullInt64) interface{} {
 	return nil
 }
 
+// nullableStringArg готовит nullable-строку для SQL.
 func nullableStringArg(value sql.NullString) interface{} {
 	if value.Valid {
 		return value.String
@@ -85,6 +96,7 @@ func nullableStringArg(value sql.NullString) interface{} {
 	return nil
 }
 
+// validateFullName проверяет, что ФИО похоже на полное имя.
 func validateFullName(value string) string {
 	text := normalizeSpaces(value)
 	if len([]rune(text)) < 5 {
@@ -99,6 +111,7 @@ func validateFullName(value string) string {
 	return ""
 }
 
+// validatePurpose проверяет, что цель визита заполнена нормально.
 func validatePurpose(value string) string {
 	text := strings.TrimSpace(value)
 	if len([]rune(text)) < 3 {
@@ -110,6 +123,7 @@ func validatePurpose(value string) string {
 	return ""
 }
 
+// validateDate проверяет дату на прошлое и слишком дальнее будущее.
 func validateDate(value string) error {
 	visitDate, err := time.ParseInLocation("2006-01-02", value, moscowLocation())
 	if err != nil {
@@ -124,11 +138,13 @@ func validateDate(value string) error {
 	return nil
 }
 
+// maxBookableDate считает границу бронирования на два месяца вперед.
 func maxBookableDate() time.Time {
 	now := moscowNow()
 	return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, moscowLocation()).AddDate(0, 2, 0)
 }
 
+// validateTime проверяет время в формате ЧЧ:ММ.
 func validateTime(value string) string {
 	if !regexp.MustCompile(`^([01]\d|2[0-3]):[0-5]\d$`).MatchString(strings.TrimSpace(value)) {
 		return "Время должно быть в формате ЧЧ:ММ."
@@ -136,6 +152,7 @@ func validateTime(value string) string {
 	return ""
 }
 
+// validateVisitDateTime проверяет, что выбранное время еще не прошло.
 func validateVisitDateTime(visitDate, visitTime string) string {
 	if err := validateDate(visitDate); err != nil {
 		return err.Error()
@@ -154,6 +171,7 @@ func validateVisitDateTime(visitDate, visitTime string) string {
 	return ""
 }
 
+// validateDraftVisitTime проверяет время с датой из текущего черновика.
 func (app *App) validateDraftVisitTime(userID int64, visitTime string) string {
 	draft, err := app.getDraft(userID)
 	if err != nil || draft == nil || !draft.VisitDate.Valid {
@@ -162,6 +180,7 @@ func (app *App) validateDraftVisitTime(userID int64, visitTime string) string {
 	return validateVisitDateTime(draft.VisitDate.String, visitTime)
 }
 
+// parseDateInput превращает ручной ввод даты в формат YYYY-MM-DD.
 func parseDateInput(value string) string {
 	text := strings.TrimSpace(value)
 	if regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`).MatchString(text) {
@@ -174,10 +193,12 @@ func parseDateInput(value string) string {
 	return ""
 }
 
+// normalizeSpaces схлопывает лишние пробелы в пользовательском вводе.
 func normalizeSpaces(value string) string {
 	return strings.Join(strings.Fields(strings.TrimSpace(value)), " ")
 }
 
+// statusLabel переводит внутренний статус заявки в русский текст.
 func statusLabel(status string) string {
 	labels := map[string]string{
 		"pending_review":          "на рассмотрении",
@@ -197,6 +218,7 @@ func statusLabel(status string) string {
 	return status
 }
 
+// roleLabel переводит внутреннюю роль пользователя в русский текст.
 func roleLabel(role string) string {
 	labels := map[string]string{
 		roleInitiator: "инициатор",
@@ -209,6 +231,7 @@ func roleLabel(role string) string {
 	return role
 }
 
+// entryLabel переводит тип прохода в понятную подпись.
 func entryLabel(entryType string) string {
 	if entryType == "re_entry" {
 		return "повторный проход"
@@ -216,6 +239,7 @@ func entryLabel(entryType string) string {
 	return "первый проход"
 }
 
+// actionLabel переводит код действия аудита в понятный текст.
 func actionLabel(action string) string {
 	labels := map[string]string{
 		"admin_role_granted":     "выдал роль администратора",
@@ -239,6 +263,7 @@ func actionLabel(action string) string {
 	return action
 }
 
+// placeholders собирает строку плейсхолдеров для SQL IN.
 func placeholders(count int) string {
 	items := make([]string, count)
 	for i := range items {
@@ -247,6 +272,7 @@ func placeholders(count int) string {
 	return strings.Join(items, ",")
 }
 
+// contains проверяет наличие строки в небольшом списке.
 func contains(items []string, value string) bool {
 	for _, item := range items {
 		if item == value {
@@ -256,6 +282,7 @@ func contains(items []string, value string) bool {
 	return false
 }
 
+// parseInt разбирает int и возвращает 0 при ошибке.
 func parseInt(value string) int {
 	result, _ := strconv.Atoi(value)
 	if result < 0 {
@@ -264,11 +291,13 @@ func parseInt(value string) int {
 	return result
 }
 
+// parseInt64 разбирает int64 и возвращает 0 при ошибке.
 func parseInt64(value string) int64 {
 	result, _ := strconv.ParseInt(value, 10, 64)
 	return result
 }
 
+// looksLikeUserID проверяет, похож ли текст на MAX user id.
 func looksLikeUserID(value string) bool {
 	text := strings.TrimSpace(value)
 	if len(text) < 4 || len(text) > 20 {
@@ -277,6 +306,7 @@ func looksLikeUserID(value string) bool {
 	return regexp.MustCompile(`^\d+$`).MatchString(text)
 }
 
+// looksLikeRequestNumberQuery проверяет, похож ли текст на номер заявки.
 func looksLikeRequestNumberQuery(value string) bool {
 	text := strings.ToUpper(strings.TrimSpace(value))
 	if strings.HasPrefix(text, "PASS-") {
@@ -285,11 +315,13 @@ func looksLikeRequestNumberQuery(value string) bool {
 	return regexp.MustCompile(`^[A-Z0-9]{5}$`).MatchString(text)
 }
 
+// isMainMenuText узнает текстовые команды из главного меню.
 func isMainMenuText(value string) bool {
 	text := strings.ToLower(strings.TrimSpace(value))
 	return text == "главное меню" || text == "меню" || text == "start"
 }
 
+// slug делает безопасный кусок имени файла.
 func slug(value string) string {
 	text := strings.ToLower(value)
 	text = regexp.MustCompile(`[^a-zа-яё0-9]+`).ReplaceAllString(text, "-")

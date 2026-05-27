@@ -12,6 +12,7 @@ import (
 	"github.com/xuri/excelize/v2"
 )
 
+// adminMenu открывает стартовую панель администратора.
 func (app *App) adminMenu(ctx context.Context, bctx BotContext) error {
 	if err := app.expireOldRequests(ctx); err != nil {
 		log.Printf("expire old requests: %v", err)
@@ -27,6 +28,7 @@ func (app *App) adminMenu(ctx context.Context, bctx BotContext) error {
 	})
 }
 
+// adminQueue выводит заявки администратора с пагинацией и правильной сортировкой.
 func (app *App) adminQueue(ctx context.Context, bctx BotContext, mode string, page int) error {
 	if err := app.expireOldRequests(ctx); err != nil {
 		log.Printf("expire old requests: %v", err)
@@ -80,6 +82,7 @@ func (app *App) adminQueue(ctx context.Context, bctx BotContext, mode string, pa
 	return app.reply(ctx, bctx, title+"\n\n"+strings.Join(lines, "\n"), buttonRows)
 }
 
+// modeAction выбирает callback для текущего режима админской очереди.
 func modeAction(mode string) string {
 	if mode == "approved_today" {
 		return "approved_today"
@@ -87,6 +90,7 @@ func modeAction(mode string) string {
 	return "queue"
 }
 
+// exportActiveToday отправляет администратору Excel с заявками на сегодня.
 func (app *App) exportActiveToday(ctx context.Context, bctx BotContext) error {
 	content, activeCount, closedCount, err := app.buildTodayRequestsWorkbook()
 	if err != nil {
@@ -114,6 +118,7 @@ func (app *App) exportActiveToday(ctx context.Context, bctx BotContext) error {
 	return app.reply(ctx, bctx, fmt.Sprintf("Excel-экспорт сформирован. Активных: %d, закрытых: %d.\nФайл сохранён локально: %s", activeCount, closedCount, exportFilePath(app.cfg.DataDir, fileName)), adminBackRows())
 }
 
+// buildTodayRequestsWorkbook собирает книгу Excel с активными и закрытыми заявками.
 func (app *App) buildTodayRequestsWorkbook() ([]byte, int, int, error) {
 	// Один файл с двумя листами удобнее для поста контроля: активные заявки
 	// не смешиваются с закрытыми, но администратор всё равно получает полный
@@ -153,6 +158,7 @@ func (app *App) buildTodayRequestsWorkbook() ([]byte, int, int, error) {
 	return buf.Bytes(), len(active), len(closed), nil
 }
 
+// exportRequestsByStatuses достает заявки за дату по выбранным статусам.
 func (app *App) exportRequestsByStatuses(date string, statuses []string) ([]ExportRequestRow, error) {
 	if len(statuses) == 0 {
 		return nil, nil
@@ -190,6 +196,7 @@ func (app *App) exportRequestsByStatuses(date string, statuses []string) ([]Expo
 	return result, nil
 }
 
+// writeExportSheet оформляет один лист Excel-выгрузки.
 func writeExportSheet(workbook *excelize.File, sheet string, rows []ExportRequestRow) error {
 	headers := []string{"Номер", "ФИО", "Дата", "Время", "Зона", "Цель", "Доп. поля", "Статус", "Комментарий", "Обновлено"}
 	if err := workbook.SetSheetRow(sheet, "A1", &headers); err != nil {
@@ -228,6 +235,7 @@ func writeExportSheet(workbook *excelize.File, sheet string, rows []ExportReques
 	return nil
 }
 
+// saveExportFile оставляет файл на диске, если MAX не смог принять вложение.
 func (app *App) saveExportFile(fileName string, content []byte) error {
 	path := exportFilePath(app.cfg.DataDir, fileName)
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
@@ -236,6 +244,7 @@ func (app *App) saveExportFile(fileName string, content []byte) error {
 	return os.WriteFile(path, content, 0600)
 }
 
+// exportFilePath собирает путь к файлу выгрузки внутри data-dir.
 func exportFilePath(dataDir, fileName string) string {
 	baseDir := "./data"
 	if strings.TrimSpace(dataDir) != "" {

@@ -19,6 +19,7 @@ import (
 	"github.com/xuri/excelize/v2"
 )
 
+// newTestApp поднимает тестовое приложение на отдельной схеме PostgreSQL.
 func newTestApp(t *testing.T) *App {
 	t.Helper()
 
@@ -67,6 +68,7 @@ func newTestApp(t *testing.T) *App {
 	return app
 }
 
+// withSearchPath добавляет тестовую схему в PostgreSQL URL.
 func withSearchPath(t *testing.T, rawURL, schema string) string {
 	t.Helper()
 	parsed, err := url.Parse(rawURL)
@@ -79,6 +81,7 @@ func withSearchPath(t *testing.T, rawURL, schema string) string {
 	return parsed.String()
 }
 
+// quoteIdent экранирует имя схемы для SQL.
 func quoteIdent(identifier string) string {
 	if !regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`).MatchString(identifier) {
 		panic("unsafe postgres identifier: " + identifier)
@@ -86,10 +89,12 @@ func quoteIdent(identifier string) string {
 	return `"` + identifier + `"`
 }
 
+// testUser возвращает стандартного пользователя для сценарных тестов.
 func testUser() MaxUser {
 	return MaxUser{UserID: 1001, Name: "Тестовый пользователь"}
 }
 
+// upsertConsentedUser создает пользователя и сразу выдает ему согласие.
 func upsertConsentedUser(t *testing.T, app *App) UserRow {
 	t.Helper()
 	user := upsertUser(t, app, testUser())
@@ -97,6 +102,7 @@ func upsertConsentedUser(t *testing.T, app *App) UserRow {
 	return user
 }
 
+// upsertUser сохраняет пользователя MAX и обновляет его имя.
 func upsertUser(t *testing.T, app *App, maxUser MaxUser) UserRow {
 	t.Helper()
 	user, err := app.upsertUser(maxUser)
@@ -106,6 +112,7 @@ func upsertUser(t *testing.T, app *App, maxUser MaxUser) UserRow {
 	return user
 }
 
+// consentUser записывает тестовое согласие.
 func consentUser(t *testing.T, app *App, user UserRow) {
 	t.Helper()
 	_, err := app.exec(`
@@ -117,10 +124,12 @@ func consentUser(t *testing.T, app *App, user UserRow) {
 	}
 }
 
+// testMaxUser собирает профиль MAX для теста.
 func testMaxUser(id int64, name string) MaxUser {
 	return MaxUser{UserID: id, Name: name}
 }
 
+// createConsentedUser создает тестового пользователя с согласием.
 func createConsentedUser(t *testing.T, app *App, id int64, name string) UserRow {
 	t.Helper()
 	user := upsertUser(t, app, testMaxUser(id, name))
@@ -128,6 +137,7 @@ func createConsentedUser(t *testing.T, app *App, id int64, name string) UserRow 
 	return user
 }
 
+// setUserRole назначает роль тестовому пользователю.
 func setUserRole(t *testing.T, app *App, maxUserID int64, role string) UserRow {
 	t.Helper()
 	if _, err := app.exec(`UPDATE users SET role = ? WHERE max_user_id = ?`, role, maxUserID); err != nil {
@@ -143,6 +153,7 @@ func setUserRole(t *testing.T, app *App, maxUserID int64, role string) UserRow {
 	return *user
 }
 
+// createDraftRequest собирает заявку через черновик для теста.
 func createDraftRequest(t *testing.T, app *App, user UserRow, visitDate string, zoneID int64) string {
 	t.Helper()
 	if err := app.ensureDraft(user.ID); err != nil {
@@ -164,6 +175,7 @@ func createDraftRequest(t *testing.T, app *App, user UserRow, visitDate string, 
 	return number
 }
 
+// mustRequestByNumber загружает заявку и падает, если она не найдена.
 func mustRequestByNumber(t *testing.T, app *App, number string) RequestRow {
 	t.Helper()
 	req, err := app.requestByNumber(number)
@@ -176,6 +188,7 @@ func mustRequestByNumber(t *testing.T, app *App, number string) RequestRow {
 	return *req
 }
 
+// requestStatus читает статус заявки прямо из БД.
 func requestStatus(t *testing.T, app *App, requestID int64) string {
 	t.Helper()
 	var status string
@@ -185,6 +198,7 @@ func requestStatus(t *testing.T, app *App, requestID int64) string {
 	return status
 }
 
+// auditCount считает записи аудита по пользователю и действию.
 func auditCount(t *testing.T, app *App, actorMaxUserID int64, action string) int {
 	t.Helper()
 	var count int
@@ -194,6 +208,7 @@ func auditCount(t *testing.T, app *App, actorMaxUserID int64, action string) int
 	return count
 }
 
+// lastReply возвращает последний ответ тестового бота.
 func lastReply(t *testing.T, app *App) TestReply {
 	t.Helper()
 	if len(app.testReplies) == 0 {
@@ -202,6 +217,7 @@ func lastReply(t *testing.T, app *App) TestReply {
 	return app.testReplies[len(app.testReplies)-1]
 }
 
+// hasButtonText ищет кнопку по видимому тексту.
 func hasButtonText(rows [][]Button, text string) bool {
 	for _, row := range rows {
 		for _, button := range row {
@@ -213,6 +229,7 @@ func hasButtonText(rows [][]Button, text string) bool {
 	return false
 }
 
+// hasButtonPayloadPrefix ищет кнопку по началу payload.
 func hasButtonPayloadPrefix(rows [][]Button, prefix string) bool {
 	for _, row := range rows {
 		for _, button := range row {
@@ -231,17 +248,20 @@ type BotScenario struct {
 	user MaxUser
 }
 
+// NewScenario запускает сценарный раннер Say/Click/Expect.
 func NewScenario(t *testing.T, app *App, user MaxUser) *BotScenario {
 	t.Helper()
 	return &BotScenario{t: t, app: app, ctx: context.Background(), user: user}
 }
 
+// As переключает сценарный тест на другого пользователя.
 func (s *BotScenario) As(user MaxUser) *BotScenario {
 	s.t.Helper()
 	s.user = user
 	return s
 }
 
+// Say отправляет сообщение в сценарном тесте.
 func (s *BotScenario) Say(text string) *BotScenario {
 	s.t.Helper()
 	if err := s.app.handleBotContext(s.ctx, BotContext{User: s.user, Text: text}); err != nil {
@@ -250,11 +270,13 @@ func (s *BotScenario) Say(text string) *BotScenario {
 	return s
 }
 
+// Command отправляет команду в сценарном тесте.
 func (s *BotScenario) Command(text string) *BotScenario {
 	s.t.Helper()
 	return s.Say(text)
 }
 
+// Click нажимает кнопку по ее тексту.
 func (s *BotScenario) Click(text string) *BotScenario {
 	s.t.Helper()
 	reply := lastReply(s.t, s.app)
@@ -272,6 +294,7 @@ func (s *BotScenario) Click(text string) *BotScenario {
 	return s
 }
 
+// ClickPayload нажимает кнопку по точному payload.
 func (s *BotScenario) ClickPayload(payload string) *BotScenario {
 	s.t.Helper()
 	if err := s.app.handleBotContext(s.ctx, BotContext{User: s.user, Payload: payload}); err != nil {
@@ -280,6 +303,7 @@ func (s *BotScenario) ClickPayload(payload string) *BotScenario {
 	return s
 }
 
+// ExpectText проверяет текст последнего ответа.
 func (s *BotScenario) ExpectText(part string) *BotScenario {
 	s.t.Helper()
 	reply := lastReply(s.t, s.app)
@@ -289,6 +313,7 @@ func (s *BotScenario) ExpectText(part string) *BotScenario {
 	return s
 }
 
+// ExpectButton проверяет кнопку в последнем ответе.
 func (s *BotScenario) ExpectButton(text string) *BotScenario {
 	s.t.Helper()
 	reply := lastReply(s.t, s.app)
@@ -298,6 +323,7 @@ func (s *BotScenario) ExpectButton(text string) *BotScenario {
 	return s
 }
 
+// ExpectNoButton проверяет, что лишней кнопки нет.
 func (s *BotScenario) ExpectNoButton(text string) *BotScenario {
 	s.t.Helper()
 	reply := lastReply(s.t, s.app)
@@ -307,6 +333,7 @@ func (s *BotScenario) ExpectNoButton(text string) *BotScenario {
 	return s
 }
 
+// ExpectNoText проверяет, что лишнего текста нет.
 func (s *BotScenario) ExpectNoText(part string) *BotScenario {
 	s.t.Helper()
 	reply := lastReply(s.t, s.app)
@@ -316,11 +343,13 @@ func (s *BotScenario) ExpectNoText(part string) *BotScenario {
 	return s
 }
 
+// LastReply возвращает последний ответ сценарного раннера.
 func (s *BotScenario) LastReply() TestReply {
 	s.t.Helper()
 	return lastReply(s.t, s.app)
 }
 
+// TestAskDateUsesHumanLabels проверяет отдельный сценарий бота, чтобы не гонять его вручную.
 func TestAskDateUsesHumanLabels(t *testing.T) {
 	app := newTestApp(t)
 	user := upsertConsentedUser(t, app)
@@ -342,6 +371,7 @@ func TestAskDateUsesHumanLabels(t *testing.T) {
 	}
 }
 
+// TestDuplicateStartFromMaxEventsIsSuppressed проверяет отдельный сценарий бота, чтобы не гонять его вручную.
 func TestDuplicateStartFromMaxEventsIsSuppressed(t *testing.T) {
 	app := newTestApp(t)
 	user := upsertConsentedUser(t, app)
@@ -364,6 +394,7 @@ func TestDuplicateStartFromMaxEventsIsSuppressed(t *testing.T) {
 	}
 }
 
+// TestCustomDateInputMovesToTimeSelection проверяет отдельный сценарий бота, чтобы не гонять его вручную.
 func TestCustomDateInputMovesToTimeSelection(t *testing.T) {
 	app := newTestApp(t)
 	user := upsertConsentedUser(t, app)
@@ -393,6 +424,7 @@ func TestCustomDateInputMovesToTimeSelection(t *testing.T) {
 	}
 }
 
+// TestRecoverCustomDateInputWithoutSession проверяет отдельный сценарий бота, чтобы не гонять его вручную.
 func TestRecoverCustomDateInputWithoutSession(t *testing.T) {
 	app := newTestApp(t)
 	user := upsertConsentedUser(t, app)
@@ -418,6 +450,7 @@ func TestRecoverCustomDateInputWithoutSession(t *testing.T) {
 	}
 }
 
+// TestPastDateIsRejected проверяет отдельный сценарий бота, чтобы не гонять его вручную.
 func TestPastDateIsRejected(t *testing.T) {
 	app := newTestApp(t)
 	user := upsertConsentedUser(t, app)
@@ -434,6 +467,7 @@ func TestPastDateIsRejected(t *testing.T) {
 		ExpectButton("Главное меню")
 }
 
+// TestCustomDateInputAcceptsHackathonDateWhileCurrent проверяет отдельный сценарий бота, чтобы не гонять его вручную.
 func TestCustomDateInputAcceptsHackathonDateWhileCurrent(t *testing.T) {
 	if "2026-05-24" < todayMoscow() {
 		t.Skip("24.05.2026 is already in the past for this test run")
@@ -464,6 +498,7 @@ func TestCustomDateInputAcceptsHackathonDateWhileCurrent(t *testing.T) {
 	}
 }
 
+// TestDraftFlowRequestsAllFieldsInOrder проверяет отдельный сценарий бота, чтобы не гонять его вручную.
 func TestDraftFlowRequestsAllFieldsInOrder(t *testing.T) {
 	app := newTestApp(t)
 	user := upsertConsentedUser(t, app)
@@ -517,6 +552,7 @@ func TestDraftFlowRequestsAllFieldsInOrder(t *testing.T) {
 	}
 }
 
+// TestRecoverDraftInputWithoutSession проверяет отдельный сценарий бота, чтобы не гонять его вручную.
 func TestRecoverDraftInputWithoutSession(t *testing.T) {
 	app := newTestApp(t)
 	user := upsertConsentedUser(t, app)
@@ -539,6 +575,7 @@ func TestRecoverDraftInputWithoutSession(t *testing.T) {
 	}
 }
 
+// TestScenarioInitiatorCreatesPassWithManualDate проверяет отдельный сценарий бота, чтобы не гонять его вручную.
 func TestScenarioInitiatorCreatesPassWithManualDate(t *testing.T) {
 	app := newTestApp(t)
 	user := testMaxUser(7001, "Сценарный Пользователь")
@@ -577,6 +614,7 @@ func TestScenarioInitiatorCreatesPassWithManualDate(t *testing.T) {
 		ExpectButton("Назад")
 }
 
+// TestScenarioFastFullNameAfterCreatePassIsCaptured проверяет отдельный сценарий бота, чтобы не гонять его вручную.
 func TestScenarioFastFullNameAfterCreatePassIsCaptured(t *testing.T) {
 	app := newTestApp(t)
 	user := testMaxUser(7301, "Быстрый Пользователь")
@@ -610,6 +648,7 @@ func TestScenarioFastFullNameAfterCreatePassIsCaptured(t *testing.T) {
 	}
 }
 
+// TestScenarioEditSingleDraftFieldReturnsToSummary проверяет отдельный сценарий бота, чтобы не гонять его вручную.
 func TestScenarioEditSingleDraftFieldReturnsToSummary(t *testing.T) {
 	app := newTestApp(t)
 	user := upsertConsentedUser(t, app)
@@ -669,6 +708,7 @@ func TestScenarioEditSingleDraftFieldReturnsToSummary(t *testing.T) {
 		ExpectNoText("Выберите дату посещения")
 }
 
+// TestScenarioAdminReviewsClarifiesApprovesAndConfirmsEntry проверяет отдельный сценарий бота, чтобы не гонять его вручную.
 func TestScenarioAdminReviewsClarifiesApprovesAndConfirmsEntry(t *testing.T) {
 	app := newTestApp(t)
 	initiator := upsertConsentedUser(t, app)
@@ -727,6 +767,7 @@ func TestScenarioAdminReviewsClarifiesApprovesAndConfirmsEntry(t *testing.T) {
 	}
 }
 
+// TestScenarioAdminSearchCapturesRequestNumber проверяет отдельный сценарий бота, чтобы не гонять его вручную.
 func TestScenarioAdminSearchCapturesRequestNumber(t *testing.T) {
 	app := newTestApp(t)
 	initiator := upsertConsentedUser(t, app)
@@ -759,6 +800,7 @@ func TestScenarioAdminSearchCapturesRequestNumber(t *testing.T) {
 		ExpectNoText("Откройте меню командой /start")
 }
 
+// TestScenarioTechAdminManagesAdmins проверяет отдельный сценарий бота, чтобы не гонять его вручную.
 func TestScenarioTechAdminManagesAdmins(t *testing.T) {
 	app := newTestApp(t)
 	tech := setUserRole(t, app, createConsentedUser(t, app, 7201, "Сценарный Тех").MaxUserID, roleTechAdmin)
@@ -796,6 +838,7 @@ func TestScenarioTechAdminManagesAdmins(t *testing.T) {
 	}
 }
 
+// TestOnboardingConsentAndRoleMenus проверяет отдельный сценарий бота, чтобы не гонять его вручную.
 func TestOnboardingConsentAndRoleMenus(t *testing.T) {
 	app := newTestApp(t)
 	ctx := context.Background()
@@ -841,6 +884,7 @@ func TestOnboardingConsentAndRoleMenus(t *testing.T) {
 	}
 }
 
+// TestDataPolicyAndConsentWithdrawal проверяет отдельный сценарий бота, чтобы не гонять его вручную.
 func TestDataPolicyAndConsentWithdrawal(t *testing.T) {
 	app := newTestApp(t)
 	user := upsertConsentedUser(t, app)
@@ -868,6 +912,7 @@ func TestDataPolicyAndConsentWithdrawal(t *testing.T) {
 	}
 }
 
+// TestMyRequestsEmptyHasBackButton проверяет отдельный сценарий бота, чтобы не гонять его вручную.
 func TestMyRequestsEmptyHasBackButton(t *testing.T) {
 	app := newTestApp(t)
 	user := upsertConsentedUser(t, app)
@@ -882,6 +927,7 @@ func TestMyRequestsEmptyHasBackButton(t *testing.T) {
 	_ = user
 }
 
+// TestMyRequestsListEndsWithBackButton проверяет отдельный сценарий бота, чтобы не гонять его вручную.
 func TestMyRequestsListEndsWithBackButton(t *testing.T) {
 	app := newTestApp(t)
 	user := upsertConsentedUser(t, app)
@@ -895,6 +941,7 @@ func TestMyRequestsListEndsWithBackButton(t *testing.T) {
 		ExpectButton("Главное меню")
 }
 
+// TestClarificationNotificationLetsInitiatorAnswer проверяет отдельный сценарий бота, чтобы не гонять его вручную.
 func TestClarificationNotificationLetsInitiatorAnswer(t *testing.T) {
 	app := newTestApp(t)
 	initiator := upsertConsentedUser(t, app)
@@ -932,6 +979,7 @@ func TestClarificationNotificationLetsInitiatorAnswer(t *testing.T) {
 	}
 }
 
+// TestValidationHelpers проверяет отдельный сценарий бота, чтобы не гонять его вручную.
 func TestValidationHelpers(t *testing.T) {
 	if validateFullName("12345") == "" {
 		t.Fatalf("numeric full name must be invalid")
@@ -978,6 +1026,7 @@ func TestValidationHelpers(t *testing.T) {
 	}
 }
 
+// TestPostgresOpenAndInit проверяет отдельный сценарий бота, чтобы не гонять его вручную.
 func TestPostgresOpenAndInit(t *testing.T) {
 	app := newTestApp(t)
 	var ok int
@@ -986,6 +1035,7 @@ func TestPostgresOpenAndInit(t *testing.T) {
 	}
 }
 
+// TestLoadDotEnvAcceptsUTF8BOM проверяет отдельный сценарий бота, чтобы не гонять его вручную.
 func TestLoadDotEnvAcceptsUTF8BOM(t *testing.T) {
 	t.Setenv("BOT_TOKEN", "")
 	path := filepath.Join(t.TempDir(), ".env")
@@ -1000,6 +1050,7 @@ func TestLoadDotEnvAcceptsUTF8BOM(t *testing.T) {
 	}
 }
 
+// TestMonitoringHealthAndMetrics проверяет отдельный сценарий бота, чтобы не гонять его вручную.
 func TestMonitoringHealthAndMetrics(t *testing.T) {
 	app := newTestApp(t)
 	app.metrics = newMetrics()
@@ -1037,6 +1088,7 @@ func TestMonitoringHealthAndMetrics(t *testing.T) {
 	}
 }
 
+// TestUpdateLagParsesMaxTimestamp проверяет отдельный сценарий бота, чтобы не гонять его вручную.
 func TestUpdateLagParsesMaxTimestamp(t *testing.T) {
 	updateTime := time.Now().Add(-2 * time.Second)
 	lag, ok := updateLag(Update{Timestamp: updateTime.UnixMilli()})
@@ -1048,6 +1100,7 @@ func TestUpdateLagParsesMaxTimestamp(t *testing.T) {
 	}
 }
 
+// TestAttachmentNotReadyErrorIsRetryable проверяет отдельный сценарий бота, чтобы не гонять его вручную.
 func TestAttachmentNotReadyErrorIsRetryable(t *testing.T) {
 	err := errors.New(`max api POST /messages: status 400: {"code":"attachment.not.ready","message":"Key: errors.process.attachment.file.not.processed"}`)
 	if !isAttachmentNotReady(err) {
@@ -1058,6 +1111,7 @@ func TestAttachmentNotReadyErrorIsRetryable(t *testing.T) {
 	}
 }
 
+// TestSubmitRequestAndBlockDuplicateSameDateZone проверяет отдельный сценарий бота, чтобы не гонять его вручную.
 func TestSubmitRequestAndBlockDuplicateSameDateZone(t *testing.T) {
 	app := newTestApp(t)
 	user := upsertConsentedUser(t, app)
@@ -1087,6 +1141,7 @@ func TestSubmitRequestAndBlockDuplicateSameDateZone(t *testing.T) {
 	}
 }
 
+// TestAllowsSameDateDifferentZone проверяет отдельный сценарий бота, чтобы не гонять его вручную.
 func TestAllowsSameDateDifferentZone(t *testing.T) {
 	app := newTestApp(t)
 	user := upsertConsentedUser(t, app)
@@ -1094,6 +1149,7 @@ func TestAllowsSameDateDifferentZone(t *testing.T) {
 	createDraftRequest(t, app, user, todayMoscow(), 2)
 }
 
+// TestInitiatorCanCancelPendingRequest проверяет отдельный сценарий бота, чтобы не гонять его вручную.
 func TestInitiatorCanCancelPendingRequest(t *testing.T) {
 	app := newTestApp(t)
 	user := upsertConsentedUser(t, app)
@@ -1111,6 +1167,7 @@ func TestInitiatorCanCancelPendingRequest(t *testing.T) {
 	}
 }
 
+// TestStatusTransitionsAreValidatedAndClosedAtIsSet проверяет отдельный сценарий бота, чтобы не гонять его вручную.
 func TestStatusTransitionsAreValidatedAndClosedAtIsSet(t *testing.T) {
 	app := newTestApp(t)
 	user := upsertConsentedUser(t, app)
@@ -1136,6 +1193,7 @@ func TestStatusTransitionsAreValidatedAndClosedAtIsSet(t *testing.T) {
 	}
 }
 
+// TestAdminApproveRejectClarifyAndAnswer проверяет отдельный сценарий бота, чтобы не гонять его вручную.
 func TestAdminApproveRejectClarifyAndAnswer(t *testing.T) {
 	app := newTestApp(t)
 	initiator := upsertConsentedUser(t, app)
@@ -1204,6 +1262,7 @@ func TestAdminApproveRejectClarifyAndAnswer(t *testing.T) {
 	}
 }
 
+// TestEntryConfirmationFirstAndRepeat проверяет отдельный сценарий бота, чтобы не гонять его вручную.
 func TestEntryConfirmationFirstAndRepeat(t *testing.T) {
 	app := newTestApp(t)
 	initiator := upsertConsentedUser(t, app)
@@ -1229,6 +1288,7 @@ func TestEntryConfirmationFirstAndRepeat(t *testing.T) {
 	}
 }
 
+// TestEntryConfirmationRejectedForWrongStatusAndWrongDate проверяет отдельный сценарий бота, чтобы не гонять его вручную.
 func TestEntryConfirmationRejectedForWrongStatusAndWrongDate(t *testing.T) {
 	app := newTestApp(t)
 	initiator := upsertConsentedUser(t, app)
@@ -1254,6 +1314,7 @@ func TestEntryConfirmationRejectedForWrongStatusAndWrongDate(t *testing.T) {
 	}
 }
 
+// TestExpireOldRequestsMarksNoShowAndExpired проверяет отдельный сценарий бота, чтобы не гонять его вручную.
 func TestExpireOldRequestsMarksNoShowAndExpired(t *testing.T) {
 	app := newTestApp(t)
 	user := upsertConsentedUser(t, app)
@@ -1286,6 +1347,7 @@ func TestExpireOldRequestsMarksNoShowAndExpired(t *testing.T) {
 	}
 }
 
+// TestRequestHistoryEntriesListsAndExport проверяет отдельный сценарий бота, чтобы не гонять его вручную.
 func TestRequestHistoryEntriesListsAndExport(t *testing.T) {
 	app := newTestApp(t)
 	user := upsertConsentedUser(t, app)
@@ -1348,6 +1410,7 @@ func TestRequestHistoryEntriesListsAndExport(t *testing.T) {
 	}
 }
 
+// TestTechAdminCanListGrantRevokeAndAuditAdmins проверяет отдельный сценарий бота, чтобы не гонять его вручную.
 func TestTechAdminCanListGrantRevokeAndAuditAdmins(t *testing.T) {
 	app := newTestApp(t)
 	tech := setUserRole(t, app, createConsentedUser(t, app, 6001, "Тех Админ").MaxUserID, roleTechAdmin)
@@ -1396,6 +1459,7 @@ func TestTechAdminCanListGrantRevokeAndAuditAdmins(t *testing.T) {
 	}
 }
 
+// TestTechAdminCannotGrantUnknownUserOrRevokeTechAdmin проверяет отдельный сценарий бота, чтобы не гонять его вручную.
 func TestTechAdminCannotGrantUnknownUserOrRevokeTechAdmin(t *testing.T) {
 	app := newTestApp(t)
 	tech := setUserRole(t, app, createConsentedUser(t, app, 6101, "Тех Админ").MaxUserID, roleTechAdmin)
@@ -1416,6 +1480,7 @@ func TestTechAdminCannotGrantUnknownUserOrRevokeTechAdmin(t *testing.T) {
 	}
 }
 
+// TestTechAdminCanManageZones проверяет отдельный сценарий бота, чтобы не гонять его вручную.
 func TestTechAdminCanManageZones(t *testing.T) {
 	app := newTestApp(t)
 	tech := setUserRole(t, app, createConsentedUser(t, app, 6201, "Тех Админ").MaxUserID, roleTechAdmin)
@@ -1446,6 +1511,7 @@ func TestTechAdminCanManageZones(t *testing.T) {
 	}
 }
 
+// TestTechAdminExtraFieldsAreCollectedAndShownInRequest проверяет отдельный сценарий бота, чтобы не гонять его вручную.
 func TestTechAdminExtraFieldsAreCollectedAndShownInRequest(t *testing.T) {
 	app := newTestApp(t)
 	tech := setUserRole(t, app, createConsentedUser(t, app, 6301, "Тех Админ").MaxUserID, roleTechAdmin)
@@ -1498,6 +1564,7 @@ func TestTechAdminExtraFieldsAreCollectedAndShownInRequest(t *testing.T) {
 	}
 }
 
+// TestAdminQueueOrdersByVisitDateAndTime проверяет отдельный сценарий бота, чтобы не гонять его вручную.
 func TestAdminQueueOrdersByVisitDateAndTime(t *testing.T) {
 	app := newTestApp(t)
 	admin := setUserRole(t, app, createConsentedUser(t, app, 6401, "Админ").MaxUserID, roleAdmin)
@@ -1532,6 +1599,7 @@ func TestAdminQueueOrdersByVisitDateAndTime(t *testing.T) {
 	}
 }
 
+// TestGroupUpdatesByUserKeepsPerUserOrder проверяет отдельный сценарий бота, чтобы не гонять его вручную.
 func TestGroupUpdatesByUserKeepsPerUserOrder(t *testing.T) {
 	updates := []Update{
 		{UpdateType: "message_callback", Callback: &Callback{User: testMaxUser(1, "one"), Payload: "draft:start"}},
@@ -1547,6 +1615,7 @@ func TestGroupUpdatesByUserKeepsPerUserOrder(t *testing.T) {
 	}
 }
 
+// todayMoscowAsHuman показывает сегодняшнюю дату как в интерфейсе.
 func todayMoscowAsHuman() string {
 	t, err := time.Parse("2006-01-02", todayMoscow())
 	if err != nil {
@@ -1555,6 +1624,7 @@ func todayMoscowAsHuman() string {
 	return t.Format("02.01.2006")
 }
 
+// safeVisitTime выбирает время, которое не конфликтует с правилом одного часа.
 func safeVisitTime(visitDate string) string {
 	if visitDate == todayMoscow() {
 		return "23:59"

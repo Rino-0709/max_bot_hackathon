@@ -9,6 +9,7 @@ import (
 	"strings"
 )
 
+// approveRequest подтверждает заявку и уведомляет гостя.
 func (app *App) approveRequest(ctx context.Context, bctx BotContext, actor UserRow, requestID int64, comment string) error {
 	message := "Заявка одобрена."
 	if comment != "" {
@@ -25,6 +26,7 @@ func (app *App) approveRequest(ctx context.Context, bctx BotContext, actor UserR
 	return app.reply(ctx, bctx, "Заявка одобрена.", adminBackRows())
 }
 
+// updateRequestStatus меняет статус заявки и пишет событие в историю.
 func (app *App) updateRequestStatus(requestID int64, status string, actor UserRow, message string, publicComment string) error {
 	var current string
 	if err := app.queryRow(`SELECT status FROM pass_requests WHERE id = ?`, requestID).Scan(&current); err != nil {
@@ -54,6 +56,7 @@ func (app *App) updateRequestStatus(requestID int64, status string, actor UserRo
 	return nil
 }
 
+// allowedStatusTransition держит белый список допустимых переходов статусов.
 func allowedStatusTransition(from, to string) bool {
 	if from == to {
 		return true
@@ -75,6 +78,7 @@ func allowedStatusTransition(from, to string) bool {
 	return contains(allowed[from], to)
 }
 
+// cleanAdminComment убирает из комментария служебные слова, которые нужны только боту.
 func cleanAdminComment(text string) string {
 	comment := strings.Join(strings.Fields(strings.TrimSpace(text)), " ")
 	if len([]rune(comment)) > 240 {
@@ -83,6 +87,7 @@ func cleanAdminComment(text string) string {
 	return comment
 }
 
+// registerEntry фиксирует первый или повторный проход по одобренной заявке.
 func (app *App) registerEntry(requestID int64, actor UserRow) (string, error) {
 	req, err := app.requestByID(requestID)
 	if err != nil {
@@ -124,12 +129,14 @@ func (app *App) registerEntry(requestID int64, actor UserRow) (string, error) {
 	return entryType, nil
 }
 
+// entryCount возвращает количество проходов по заявке.
 func (app *App) entryCount(requestID int64) int {
 	var count int
 	_ = app.queryRow(`SELECT COUNT(*) FROM entry_events WHERE pass_request_id = ?`, requestID).Scan(&count)
 	return count
 }
 
+// expireOldRequests переводит вчерашние незакрытые заявки в устаревшие.
 func (app *App) expireOldRequests(ctx context.Context) error {
 	// Просрочки считаются лениво при открытии списков. Для MVP это проще
 	// фонового планировщика, а в проде эту функцию можно вынести в cron/job.
@@ -170,10 +177,12 @@ func (app *App) expireOldRequests(ctx context.Context) error {
 	return rows.Err()
 }
 
+// notifyOwner находит автора заявки и отправляет ему сообщение.
 func (app *App) notifyOwner(ctx context.Context, requestID int64, text string) {
 	app.notifyOwnerWithRows(ctx, requestID, text, nil)
 }
 
+// notifyOwnerWithRows находит автора заявки и отправляет ему сообщение с кнопками.
 func (app *App) notifyOwnerWithRows(ctx context.Context, requestID int64, text string, rows [][]Button) {
 	var maxUserID int64
 	if err := app.queryRow(`
@@ -186,10 +195,12 @@ func (app *App) notifyOwnerWithRows(ctx context.Context, requestID int64, text s
 	}
 }
 
+// sendUserNotification отправляет уведомление по MAX user id.
 func (app *App) sendUserNotification(ctx context.Context, maxUserID int64, text string) error {
 	return app.sendUserNotificationWithRows(ctx, maxUserID, text, nil)
 }
 
+// sendUserNotificationWithRows отправляет уведомление с кнопками по MAX user id.
 func (app *App) sendUserNotificationWithRows(ctx context.Context, maxUserID int64, text string, rows [][]Button) error {
 	if app.api == nil {
 		app.testReplies = append(app.testReplies, TestReply{Text: text, Rows: rows})
@@ -198,12 +209,14 @@ func (app *App) sendUserNotificationWithRows(ctx context.Context, maxUserID int6
 	return app.api.SendToUser(ctx, maxUserID, text, rows)
 }
 
+// requestNumber возвращает короткий номер заявки для сообщений и аудита.
 func (app *App) requestNumber(requestID int64) string {
 	var number string
 	_ = app.queryRow(`SELECT request_number FROM pass_requests WHERE id = ?`, requestID).Scan(&number)
 	return number
 }
 
+// requestEvent добавляет запись в историю конкретной заявки.
 func (app *App) requestEvent(requestID int64, actorUserID *int64, code, message string) {
 	_, _ = app.exec(`
 		INSERT INTO request_events (pass_request_id, actor_user_id, event_code, public_message, created_at)
@@ -211,6 +224,7 @@ func (app *App) requestEvent(requestID int64, actorUserID *int64, code, message 
 	`, requestID, actorUserID, code, message, nowISO())
 }
 
+// audit сохраняет административное действие без лишних персональных данных.
 func (app *App) audit(actorMaxUserID int64, action, entityType string, entityID int64, metadata map[string]string) {
 	var payload interface{}
 	if metadata != nil {
@@ -223,6 +237,7 @@ func (app *App) audit(actorMaxUserID int64, action, entityType string, entityID 
 	`, actorMaxUserID, action, entityType, entityID, payload, nowISO())
 }
 
+// setSession запоминает, какой свободный ввод бот сейчас ждет от пользователя.
 func (app *App) setSession(maxUserID int64, state string, data map[string]string) {
 	if data == nil {
 		data = map[string]string{}
@@ -235,6 +250,7 @@ func (app *App) setSession(maxUserID int64, state string, data map[string]string
 	`, maxUserID, state, string(raw), nowISO())
 }
 
+// getSession возвращает текущий ожидаемый ввод пользователя.
 func (app *App) getSession(maxUserID int64) (Session, bool) {
 	var state string
 	var raw sql.NullString
@@ -252,11 +268,13 @@ func (app *App) getSession(maxUserID int64) (Session, bool) {
 	return Session{State: state, Data: data}, true
 }
 
+// isEditSession проверяет, что сейчас идет редактирование нужного поля.
 func (app *App) isEditSession(maxUserID int64, state string) bool {
 	session, ok := app.getSession(maxUserID)
 	return ok && session.State == state && session.Data["mode"] == "edit"
 }
 
+// clearSession очищает ожидание свободного ввода.
 func (app *App) clearSession(maxUserID int64) {
 	_, _ = app.exec(`DELETE FROM sessions WHERE max_user_id = ?`, maxUserID)
 }

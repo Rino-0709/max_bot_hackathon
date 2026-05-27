@@ -11,6 +11,7 @@ import (
 	"strings"
 )
 
+// activeExtraFields возвращает включенные дополнительные поля формы.
 func (app *App) activeExtraFields() ([]ExtraFieldRow, error) {
 	rows, err := app.query(`
 		SELECT id, label, is_active, sort_order
@@ -25,6 +26,7 @@ func (app *App) activeExtraFields() ([]ExtraFieldRow, error) {
 	return scanExtraFields(rows)
 }
 
+// allExtraFields возвращает весь справочник допполей, включая выключенные.
 func (app *App) allExtraFields() ([]ExtraFieldRow, error) {
 	rows, err := app.query(`
 		SELECT id, label, is_active, sort_order
@@ -38,6 +40,7 @@ func (app *App) allExtraFields() ([]ExtraFieldRow, error) {
 	return scanExtraFields(rows)
 }
 
+// scanExtraFields читает допполя из результата SQL-запроса.
 func scanExtraFields(rows *sql.Rows) ([]ExtraFieldRow, error) {
 	var result []ExtraFieldRow
 	for rows.Next() {
@@ -50,6 +53,7 @@ func scanExtraFields(rows *sql.Rows) ([]ExtraFieldRow, error) {
 	return result, rows.Err()
 }
 
+// showExtraFields показывает техадмину список и состояние допполей.
 func (app *App) showExtraFields(ctx context.Context, bctx BotContext) error {
 	fields, err := app.allExtraFields()
 	if err != nil {
@@ -77,6 +81,7 @@ func (app *App) showExtraFields(ctx context.Context, bctx BotContext) error {
 	return app.reply(ctx, bctx, "Дополнительные поля формы\n\n"+strings.Join(lines, "\n"), buttons)
 }
 
+// addExtraFieldsFromText добавляет допполя из строк, которые ввел техадмин.
 func (app *App) addExtraFieldsFromText(ctx context.Context, bctx BotContext, actor UserRow, text string) error {
 	labels := parseExtraFieldLabels(text)
 	if len(labels) == 0 {
@@ -104,6 +109,7 @@ func (app *App) addExtraFieldsFromText(ctx context.Context, bctx BotContext, act
 	return app.showExtraFields(ctx, bctx)
 }
 
+// parseExtraFieldLabels режет сообщение техадмина на названия полей.
 func parseExtraFieldLabels(text string) []string {
 	parts := regexp.MustCompile(`[\n,;]+`).Split(text, -1)
 	seen := map[string]bool{}
@@ -124,6 +130,7 @@ func parseExtraFieldLabels(text string) []string {
 	return result
 }
 
+// toggleExtraField включает или выключает допполе, не удаляя старые ответы.
 func (app *App) toggleExtraField(ctx context.Context, bctx BotContext, actor UserRow, fieldID int64) error {
 	var active int
 	if err := app.queryRow(`SELECT is_active FROM extra_field_definitions WHERE id = ?`, fieldID).Scan(&active); err != nil {
@@ -140,6 +147,7 @@ func (app *App) toggleExtraField(ctx context.Context, bctx BotContext, actor Use
 	return app.showExtraFields(ctx, bctx)
 }
 
+// askNextExtraFieldOrSummary ведет гостя по допполям и потом показывает сводку.
 func (app *App) askNextExtraFieldOrSummary(ctx context.Context, bctx BotContext, user UserRow) error {
 	field, ok, err := app.nextMissingExtraField(user.ID)
 	if err != nil {
@@ -155,6 +163,7 @@ func (app *App) askNextExtraFieldOrSummary(ctx context.Context, bctx BotContext,
 	return app.reply(ctx, bctx, "Заполните дополнительное поле:\n\n"+field.Label, draftBackRows("draft:back_purpose"))
 }
 
+// nextMissingExtraField ищет следующее незаполненное допполе в черновике.
 func (app *App) nextMissingExtraField(userID int64) (ExtraFieldRow, bool, error) {
 	fields, err := app.activeExtraFields()
 	if err != nil || len(fields) == 0 {
@@ -173,6 +182,7 @@ func (app *App) nextMissingExtraField(userID int64) (ExtraFieldRow, bool, error)
 	return ExtraFieldRow{}, false, nil
 }
 
+// setDraftExtraField сохраняет ответ гостя на дополнительное поле в черновике.
 func (app *App) setDraftExtraField(userID int64, fieldID int64, label, value string) error {
 	draft, err := app.getDraft(userID)
 	if err != nil {
@@ -203,6 +213,7 @@ func (app *App) setDraftExtraField(userID int64, fieldID int64, label, value str
 	return app.updateDraft(userID, map[string]interface{}{"extra_fields_json": string(raw)})
 }
 
+// parseExtraFieldValues разбирает JSON с ответами на допполя.
 func parseExtraFieldValues(raw string) []ExtraFieldValue {
 	if strings.TrimSpace(raw) == "" {
 		return nil
@@ -215,6 +226,7 @@ func parseExtraFieldValues(raw string) []ExtraFieldValue {
 	return values
 }
 
+// extraFieldValue достает сохраненный ответ по id или названию поля.
 func extraFieldValue(values []ExtraFieldValue, id int64, label string) string {
 	for _, item := range values {
 		if item.ID == id || strings.EqualFold(item.Label, label) {
@@ -224,6 +236,7 @@ func extraFieldValue(values []ExtraFieldValue, id int64, label string) string {
 	return ""
 }
 
+// formatExtraFieldsForText превращает ответы на допполя в строки карточки.
 func formatExtraFieldsForText(raw string) string {
 	values := parseExtraFieldValues(raw)
 	if len(values) == 0 {

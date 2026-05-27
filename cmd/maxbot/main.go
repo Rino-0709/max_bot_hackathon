@@ -10,6 +10,7 @@ import (
 	"time"
 )
 
+// main собирает зависимости приложения, поднимает мониторинг и запускает polling MAX.
 func main() {
 	rand.Seed(time.Now().UnixNano())
 
