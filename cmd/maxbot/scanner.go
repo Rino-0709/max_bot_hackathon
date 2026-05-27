@@ -3,12 +3,18 @@ package main
 import (
 	"context"
 	"crypto/subtle"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 )
+
+// scannerJSQR содержит локальный QR-движок для браузеров без BarcodeDetector.
+//
+//go:embed static/jsqr.js
+var scannerJSQR []byte
 
 type scannerRequest struct {
 	QR string `json:"qr"`
@@ -33,6 +39,7 @@ type scannerResponse struct {
 // registerScannerRoutes добавляет web-страницу сканера и его JSON API.
 func (app *App) registerScannerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/scanner", app.scannerPageHandler)
+	mux.HandleFunc("/scanner/assets/jsqr.js", app.scannerJSQRHandler)
 	mux.HandleFunc("/scanner/api/verify", app.scannerVerifyHandler)
 	mux.HandleFunc("/scanner/api/entry", app.scannerEntryHandler)
 }
@@ -41,6 +48,13 @@ func (app *App) registerScannerRoutes(mux *http.ServeMux) {
 func (app *App) scannerPageHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, _ = w.Write([]byte(scannerPageHTML))
+}
+
+// scannerJSQRHandler отдаёт локальный JS-декодер QR для мобильных браузеров.
+func (app *App) scannerJSQRHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=604800")
+	_, _ = w.Write(scannerJSQR)
 }
 
 // scannerVerifyHandler проверяет QR и возвращает карточку пропуска.
@@ -231,6 +245,7 @@ const scannerPageHTML = `<!doctype html>
     <div id="card"></div>
   </section>
 </main>
+<script src="/scanner/assets/jsqr.js"></script>
 <script>
 const token = document.querySelector('#token');
 const manual = document.querySelector('#manual');
@@ -300,22 +315,58 @@ async function callApi(path, qr) {
 }
 
 async function startCamera() {
-  if (!('BarcodeDetector' in window)) {
-    showStatus('Браузер не поддерживает BarcodeDetector. Используйте ручной ввод.', false);
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showStatus('Браузер не дал доступ к камере. Откройте сканер по HTTPS или используйте ручной ввод.', false);
     return;
   }
-  stream = await navigator.mediaDevices.getUserMedia({video: {facingMode: 'environment'}});
-  video.srcObject = stream;
-  await video.play();
-  scanning = true;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({video: {facingMode: 'environment'}});
+    video.srcObject = stream;
+    await video.play();
+    scanning = true;
+    if ('BarcodeDetector' in window) {
+      await scanWithBarcodeDetector();
+    } else {
+      await scanWithJSQR();
+    }
+  } catch (error) {
+    showStatus('Не удалось включить камеру: ' + (error.message || error), false);
+  }
+}
+
+async function scanWithBarcodeDetector() {
   const detector = new BarcodeDetector({formats: ['qr_code']});
   while (scanning) {
     const codes = await detector.detect(video).catch(() => []);
     if (codes.length > 0) {
       await verify(codes[0].rawValue);
-      await new Promise(resolve => setTimeout(resolve, 1600));
+      await wait(1600);
     }
-    await new Promise(resolve => requestAnimationFrame(resolve));
+    await nextFrame();
+  }
+}
+
+async function scanWithJSQR() {
+  if (typeof jsQR !== 'function') {
+    showStatus('QR-движок не загрузился. Используйте ручной ввод.', false);
+    return;
+  }
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d', {willReadFrequently: true});
+  showStatus('Камера включена. Наведите её на QR-код.', true);
+  while (scanning) {
+    if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const code = jsQR(image.data, image.width, image.height, {inversionAttempts: 'dontInvert'});
+      if (code && code.data) {
+        await verify(code.data);
+        await wait(1600);
+      }
+    }
+    await nextFrame();
   }
 }
 
@@ -325,6 +376,14 @@ function stopCamera() {
     stream.getTracks().forEach(track => track.stop());
     stream = null;
   }
+}
+
+function wait(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function nextFrame() {
+  return new Promise(resolve => requestAnimationFrame(resolve));
 }
 
 function escapeHtml(value) {

@@ -89,6 +89,7 @@ http://127.0.0.1:8080/scanner
 
 ```text
 http://SERVER_IP:8081/scanner
+https://SERVER_IP:8443/scanner
 ```
 
 Grafana на самом сервере:
