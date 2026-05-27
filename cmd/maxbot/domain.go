@@ -91,7 +91,7 @@ func allowedStatusTransition(from, to string) bool {
 		return true
 	}
 	// Статусы специально оформлены как белый список переходов. Так проще
-	// объяснить поведение на защите и сложнее случайно "перепрыгнуть" аудит.
+	// объяснить поведение команде сопровождения и сложнее случайно "перепрыгнуть" аудит.
 	allowed := map[string][]string{
 		"pending_review":             {"approved", "rejected", "clarification_requested", "cancelled_by_initiator", "expired", "data_erasure_requested"},
 		"clarification_requested":    {"pending_review", "cancelled_by_initiator", "expired", "data_erasure_requested"},
