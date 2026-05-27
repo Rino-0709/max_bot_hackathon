@@ -50,6 +50,7 @@ nano .env
 - `TECH_ADMIN_USER_IDS`;
 - `QR_SECRET`;
 - `SCANNER_ACCESS_TOKEN`;
+- `SCANNER_BIND` и `SCANNER_PORT`, если сканер нужно открыть наружу;
 - `POSTGRES_PASSWORD`;
 - `GRAFANA_ADMIN_PASSWORD`.
 
@@ -82,6 +83,12 @@ curl -fsS http://127.0.0.1:9090/-/healthy
 
 ```text
 http://127.0.0.1:8080/scanner
+```
+
+Публичный proxy для QR-сканера, если `SCANNER_BIND=0.0.0.0`:
+
+```text
+http://SERVER_IP:8081/scanner
 ```
 
 Grafana на самом сервере:
