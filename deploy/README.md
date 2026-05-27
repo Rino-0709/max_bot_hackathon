@@ -1,41 +1,42 @@
-# Server Deployment
+# Деплой на сервер
 
-Target: Ubuntu 22.04/24.04 VPS with Docker Compose.
+Документ описывает перенос проекта на Ubuntu-сервер с Docker Compose.
 
-Recommended server:
+Рекомендуемая конфигурация:
 
-- 2 vCPU
-- 2 GB RAM
-- 30 GB SSD
-- Ubuntu 24.04 LTS
+- 2 vCPU;
+- 2 GB RAM;
+- 30 GB SSD или больше;
+- Ubuntu 22.04/24.04 LTS.
 
-## 1. Prepare Server
+## 1. Подготовить сервер
 
-Run as a sudo-capable user:
+Запустите от пользователя с правами `sudo`:
 
 ```bash
 bash deploy/server-setup.sh
 ```
 
-The script installs Docker, enables the Docker service, creates `/opt/spring-code-1`, and opens only SSH via UFW if UFW is available.
+Скрипт устанавливает Docker, включает сервис Docker, создаёт каталог
+`/opt/spring-code-1` и, если установлен UFW, оставляет открытым только SSH.
 
-## 2. Upload Project
+## 2. Загрузить проект
 
-From local Windows PowerShell:
+С локального компьютера в Windows PowerShell:
 
 ```powershell
 .\deploy\upload.ps1 -ServerHost "SERVER_IP" -User "root"
 ```
 
-For a non-standard SSH port:
+Если SSH работает на нестандартном порту:
 
 ```powershell
 .\deploy\upload.ps1 -ServerHost "SERVER_IP" -User "root" -Port 2222
 ```
 
-## 3. Configure Environment
+## 3. Настроить окружение
 
-On server:
+На сервере:
 
 ```bash
 cd /opt/spring-code-1
@@ -43,16 +44,17 @@ cp .env.production.example .env
 nano .env
 ```
 
-Set at least:
+Минимально нужно заполнить:
 
-- `BOT_TOKEN`
-- `TECH_ADMIN_USER_IDS`
-- `POSTGRES_PASSWORD`
-- `GRAFANA_ADMIN_PASSWORD`
+- `BOT_TOKEN`;
+- `TECH_ADMIN_USER_IDS`;
+- `POSTGRES_PASSWORD`;
+- `GRAFANA_ADMIN_PASSWORD`.
 
-Leave monitoring binds as `127.0.0.1` unless Grafana is protected by VPN or nginx auth.
+Мониторинг лучше оставить привязанным к `127.0.0.1`, если Grafana не закрыта VPN,
+nginx-авторизацией или другим контролем доступа.
 
-## 4. Start
+## 4. Запустить сервисы
 
 ```bash
 cd /opt/spring-code-1
@@ -60,7 +62,7 @@ docker compose up -d --build
 docker compose ps
 ```
 
-## 5. Check
+## 5. Проверить работу
 
 ```bash
 docker compose logs -f bot
@@ -74,46 +76,48 @@ Prometheus:
 curl -fsS http://127.0.0.1:9090/-/healthy
 ```
 
-Grafana is available on the server itself at:
+Grafana на самом сервере:
 
 ```text
 http://127.0.0.1:3000
 ```
 
-For local access without opening Grafana to the internet:
+Чтобы открыть Grafana с локального компьютера и не публиковать её в интернет,
+используйте SSH-туннель:
 
 ```powershell
 ssh -L 3000:127.0.0.1:3000 root@SERVER_IP
 ```
 
-Then open:
+После этого откройте:
 
 ```text
 http://localhost:3000
 ```
 
-## 6. Backup
+## 6. Резервная копия
 
-On server:
+На сервере:
 
 ```bash
 cd /opt/spring-code-1
 bash deploy/backup-postgres.sh
 ```
 
-Backups are written to:
+Файлы резервных копий сохраняются в:
 
 ```text
 /opt/spring-code-1/backups
 ```
 
-## 7. Restore
+## 7. Восстановление
 
-Copy backup file to the server and run:
+Скопируйте файл резервной копии на сервер и выполните:
 
 ```bash
 cd /opt/spring-code-1
 bash deploy/restore-postgres.sh backups/backup-file.sql.gz
 ```
 
-Restore drops and recreates the application database. Use only during maintenance.
+Восстановление удаляет и создаёт заново базу приложения. Выполняйте его только
+во время технического окна, когда бот можно временно остановить.

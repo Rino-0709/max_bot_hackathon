@@ -467,8 +467,8 @@ func TestPastDateIsRejected(t *testing.T) {
 		ExpectButton("Главное меню")
 }
 
-// TestCustomDateInputAcceptsHackathonDateWhileCurrent проверяет отдельный сценарий бота, чтобы не гонять его вручную.
-func TestCustomDateInputAcceptsHackathonDateWhileCurrent(t *testing.T) {
+// TestCustomDateInputAcceptsCurrentDate проверяет отдельный сценарий бота, чтобы не гонять его вручную.
+func TestCustomDateInputAcceptsCurrentDate(t *testing.T) {
 	if "2026-05-24" < todayMoscow() {
 		t.Skip("24.05.2026 is already in the past for this test run")
 	}
@@ -483,7 +483,7 @@ func TestCustomDateInputAcceptsHackathonDateWhileCurrent(t *testing.T) {
 
 	err := app.handleBotContext(context.Background(), BotContext{User: testUser(), Text: "24.05.2026"})
 	if err != nil {
-		t.Fatalf("handle hackathon date: %v", err)
+		t.Fatalf("handle current date: %v", err)
 	}
 
 	draft, err := app.getDraft(user.ID)

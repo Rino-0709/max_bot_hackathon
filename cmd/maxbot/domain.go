@@ -138,7 +138,7 @@ func (app *App) entryCount(requestID int64) int {
 
 // expireOldRequests переводит вчерашние незакрытые заявки в устаревшие.
 func (app *App) expireOldRequests(ctx context.Context) error {
-	// Просрочки считаются лениво при открытии списков. Для MVP это проще
+	// Просрочки считаются лениво при открытии списков. Для текущей версии это проще
 	// фонового планировщика, а в проде эту функцию можно вынести в cron/job.
 	rows, err := app.query(`
 		SELECT pr.id, pr.request_number, pr.status, u.max_user_id

@@ -42,7 +42,12 @@ Go-бот для MAX: электронное бюро пропусков с оф
 - [observability.go](cmd/maxbot/observability.go) - healthcheck и Prometheus;
 - [util.go](cmd/maxbot/util.go) - валидация и форматирование.
 
-Подробное описание решений: [docs/architecture.md](docs/architecture.md).
+## Документация
+
+- [Архитектура](docs/architecture.md) - устройство приложения, слои и ключевые решения;
+- [Индекс документации](docs/README.md) - короткая навигация по документам проекта;
+- [Архитектурные решения](docs/adr/0001-architecture-boundaries.md) - почему проект разделён именно так;
+- [Деплой](deploy/README.md) - перенос на сервер, запуск, проверка, резервные копии и восстановление.
 
 ## Требования
 
@@ -61,7 +66,7 @@ BOT_TOKEN=your_max_bot_token
 DB_DRIVER=postgres
 DATABASE_URL=postgres://spring_code_bot:change_me_before_deploy@127.0.0.1:55432/spring_code_passes?sslmode=disable
 DATA_DIR=./data
-POLICY_VERSION=hackathon-2026-05-24
+POLICY_VERSION=personal-data-v1
 ADMIN_USER_IDS=
 TECH_ADMIN_USER_IDS=254098701
 ADMIN_BOOTSTRAP_CODE=Vesna2026
@@ -206,7 +211,7 @@ go build ./cmd/maxbot
 
 Можно также отправить текст `Главное меню` или `Меню` - бот откроет главное меню без команды `/start`.
 
-В текущем MAX Bot API основной надёжный вариант навигации - inline-кнопки в сообщениях. Постоянная Telegram-style клавиатура под полем ввода в этом MVP не используется.
+В текущем MAX Bot API основной надёжный вариант навигации - inline-кнопки в сообщениях. Постоянная Telegram-style клавиатура под полем ввода в текущей версии не используется.
 
 ## Данные и согласие
 

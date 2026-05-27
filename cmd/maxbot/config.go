@@ -39,7 +39,7 @@ func loadConfig() Config {
 		DBDriver:           strings.ToLower(getEnv("DB_DRIVER", "postgres")),
 		DataDir:            getEnv("DATA_DIR", "./data"),
 		DatabaseURL:        os.Getenv("DATABASE_URL"),
-		PolicyVersion:      getEnv("POLICY_VERSION", "hackathon-2026-05-24"),
+		PolicyVersion:      getEnv("POLICY_VERSION", "personal-data-v1"),
 		MetricsAddr:        getEnv("METRICS_ADDR", ":8080"),
 		AdminBootstrapCode: os.Getenv("ADMIN_BOOTSTRAP_CODE"),
 		AdminIDs:           parseIDSet(os.Getenv("ADMIN_USER_IDS")),
