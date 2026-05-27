@@ -204,7 +204,12 @@ const scannerPageHTML = `<!doctype html>
     label { display: block; font-weight: 650; margin-bottom: 6px; }
     input, textarea { width: 100%; box-sizing: border-box; border: 1px solid #c6d0da; border-radius: 6px; padding: 10px 12px; font: inherit; }
     textarea { min-height: 86px; resize: vertical; }
-    video { width: 100%; max-height: 420px; background: #111; border-radius: 8px; margin-top: 12px; }
+    .camera-wrap { position: relative; margin-top: 12px; border-radius: 8px; overflow: hidden; background: #111; outline: 0 solid transparent; transition: outline-color .16s ease, box-shadow .16s ease; }
+    .camera-wrap.scanned { outline: 5px solid #16a05d; box-shadow: 0 0 0 8px rgba(22, 160, 93, .22); }
+    .camera-wrap.failed { outline: 5px solid #d64545; box-shadow: 0 0 0 8px rgba(214, 69, 69, .18); }
+    video { display: block; width: 100%; max-height: 420px; background: #111; }
+    .scan-badge { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%) translateY(12px); opacity: 0; pointer-events: none; padding: 10px 14px; border-radius: 999px; background: rgba(23, 32, 42, .86); color: white; font-weight: 750; transition: opacity .16s ease, transform .16s ease; }
+    .scan-badge.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
     button { border: 0; border-radius: 6px; padding: 10px 14px; font: inherit; font-weight: 650; cursor: pointer; background: #2457c5; color: white; }
     button.secondary { background: #e8edf4; color: #17202a; }
     button.positive { background: #197a4d; }
@@ -230,7 +235,10 @@ const scannerPageHTML = `<!doctype html>
       <button id="startCamera">Включить камеру</button>
       <button id="stopCamera" class="secondary">Остановить</button>
     </div>
-    <video id="video" playsinline muted></video>
+    <div id="cameraWrap" class="camera-wrap">
+      <video id="video" playsinline muted></video>
+      <div id="scanBadge" class="scan-badge">QR считан</div>
+    </div>
   </section>
   <section>
     <label for="manual">QR вручную</label>
@@ -253,9 +261,12 @@ const statusBox = document.querySelector('#status');
 const card = document.querySelector('#card');
 const confirmButton = document.querySelector('#confirmEntry');
 const video = document.querySelector('#video');
+const cameraWrap = document.querySelector('#cameraWrap');
+const scanBadge = document.querySelector('#scanBadge');
 let lastQR = '';
 let stream = null;
 let scanning = false;
+let lastScanAt = 0;
 
 token.value = new URLSearchParams(location.search).get('key') || localStorage.getItem('scannerToken') || '';
 document.querySelector('#saveToken').onclick = () => {
@@ -276,9 +287,11 @@ function render(data) {
   confirmButton.disabled = !data.can_enter;
   card.innerHTML = '';
   if (!data.ok) {
+    scanFeedback(false, data.message || 'QR не прошёл проверку.');
     showStatus(data.message || 'QR не прошёл проверку.', false);
     return;
   }
+  scanFeedback(data.can_enter, data.can_enter ? 'QR считан' : 'QR считан, проход недоступен');
   showStatus(data.message, data.can_enter);
   card.innerHTML = '<dl>' +
     '<dt>Заявка</dt><dd>' + escapeHtml(data.number) + '</dd>' +
@@ -293,7 +306,9 @@ function render(data) {
 
 async function verify(qr) {
   if (!qr) { showStatus('QR пустой.', false); return; }
+  if (qr === lastQR && Date.now() - lastScanAt < 2500) { return; }
   lastQR = qr;
+  lastScanAt = Date.now();
   const data = await callApi('/scanner/api/verify', qr);
   render(data);
 }
@@ -372,10 +387,26 @@ async function scanWithJSQR() {
 
 function stopCamera() {
   scanning = false;
+  cameraWrap.classList.remove('scanned', 'failed');
+  scanBadge.classList.remove('visible');
   if (stream) {
     stream.getTracks().forEach(track => track.stop());
     stream = null;
   }
+}
+
+function scanFeedback(ok, text) {
+  cameraWrap.classList.remove('scanned', 'failed');
+  scanBadge.textContent = text;
+  scanBadge.classList.add('visible');
+  cameraWrap.classList.add(ok ? 'scanned' : 'failed');
+  if (navigator.vibrate) {
+    navigator.vibrate(ok ? [80, 40, 80] : [180]);
+  }
+  setTimeout(() => {
+    cameraWrap.classList.remove('scanned', 'failed');
+    scanBadge.classList.remove('visible');
+  }, 1400);
 }
 
 function wait(ms) {
