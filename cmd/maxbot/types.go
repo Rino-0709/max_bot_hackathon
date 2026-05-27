@@ -35,6 +35,8 @@ type Config struct {
 	DatabaseURL   string
 	PolicyVersion string
 	MetricsAddr   string
+	QRSecret      string
+	ScannerToken  string
 	AdminIDs      map[int64]bool
 	TechAdminIDs  map[int64]bool
 }

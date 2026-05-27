@@ -48,6 +48,8 @@ nano .env
 
 - `BOT_TOKEN`;
 - `TECH_ADMIN_USER_IDS`;
+- `QR_SECRET`;
+- `SCANNER_ACCESS_TOKEN`;
 - `POSTGRES_PASSWORD`;
 - `GRAFANA_ADMIN_PASSWORD`.
 
@@ -76,6 +78,12 @@ Prometheus:
 curl -fsS http://127.0.0.1:9090/-/healthy
 ```
 
+Тестовый QR-сканер:
+
+```text
+http://127.0.0.1:8080/scanner
+```
+
 Grafana на самом сервере:
 
 ```text
@@ -93,6 +101,18 @@ ssh -L 3000:127.0.0.1:3000 root@SERVER_IP
 
 ```text
 http://localhost:3000
+```
+
+Для QR-сканера аналогично:
+
+```powershell
+ssh -L 8080:127.0.0.1:8080 root@SERVER_IP
+```
+
+После туннеля откройте:
+
+```text
+http://localhost:8080/scanner
 ```
 
 ## 6. Резервная копия

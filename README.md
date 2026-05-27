@@ -18,6 +18,7 @@ Go-бот для MAX: электронное бюро пропусков с оф
 - единое сообщение со списком заявок пользователя и кнопками выбора заявки;
 - очередь заявок администратора;
 - одобрение с необязательным комментарием, отклонение с причиной, запрос уточнения;
+- QR-код для одобренной заявки и web-сканер для проверки пропуска;
 - подтверждение первого и повторного прохода администратором;
 - Excel-экспорт заявок на сегодня: активные и закрытые на отдельных листах;
 - история заявки и список проходов;
@@ -40,6 +41,8 @@ Go-бот для MAX: электронное бюро пропусков с оф
 - [tech_admin.go](cmd/maxbot/tech_admin.go) - техадмин, роли, зоны и аудит;
 - [domain.go](cmd/maxbot/domain.go) - бизнес-правила и статусы;
 - [observability.go](cmd/maxbot/observability.go) - healthcheck и Prometheus;
+- [qr.go](cmd/maxbot/qr.go) - QR-коды и подпись пропусков;
+- [scanner.go](cmd/maxbot/scanner.go) - web-сканер для проверки QR;
 - [util.go](cmd/maxbot/util.go) - валидация и форматирование.
 
 ## Документация
@@ -67,6 +70,8 @@ DB_DRIVER=postgres
 DATABASE_URL=postgres://spring_code_bot:change_me_before_deploy@127.0.0.1:55432/spring_code_passes?sslmode=disable
 DATA_DIR=./data
 POLICY_VERSION=personal-data-v1
+QR_SECRET=change_me_qr_secret
+SCANNER_ACCESS_TOKEN=change_me_scanner_token
 ADMIN_USER_IDS=
 TECH_ADMIN_USER_IDS=254098701
 ```
@@ -154,6 +159,24 @@ docker compose down -v
 - `maxbot_db_open_connections`, `maxbot_db_in_use_connections`, `maxbot_db_idle_connections`.
 
 Grafana автоматически подключает Prometheus и загружает dashboard `Весенний_код_1 overview`.
+
+## QR-сканер
+
+После одобрения заявки бот отправляет пользователю QR-код отдельным файлом. В QR нет ФИО и других персональных данных: только номер заявки и криптографическая подпись.
+
+Тестовый web-сканер работает на том же сервисном порту, что и метрики:
+
+```text
+http://localhost:8080/scanner
+```
+
+Для доступа нужен `SCANNER_ACCESS_TOKEN` из `.env`. На сервере порт по умолчанию закрыт на `127.0.0.1`, поэтому для проверки с локального компьютера используйте SSH-туннель:
+
+```powershell
+ssh -L 8080:127.0.0.1:8080 root@SERVER_IP
+```
+
+После проверки QR сканер показывает данные заявки, статус, дату, корпус и количество проходов. Кнопка `Подтвердить проход` фиксирует первый или повторный проход так же, как администратор в боте.
 
 ## Деплой на сервер
 

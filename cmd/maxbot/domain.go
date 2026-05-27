@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 )
 
@@ -23,7 +24,35 @@ func (app *App) approveRequest(ctx context.Context, bctx BotContext, actor UserR
 		notification += "\nКомментарий: " + comment
 	}
 	app.notifyOwner(ctx, requestID, notification)
+	if err := app.sendRequestQRCode(ctx, requestID); err != nil {
+		log.Printf("send request qr %d: %v", requestID, err)
+	}
 	return app.reply(ctx, bctx, "Заявка одобрена.", adminBackRows())
+}
+
+// sendRequestQRCode отправляет гостю QR-код для одобренной заявки.
+func (app *App) sendRequestQRCode(ctx context.Context, requestID int64) error {
+	req, err := app.requestByID(requestID)
+	if err != nil {
+		return err
+	}
+	if req == nil {
+		return errors.New("Заявка не найдена.")
+	}
+	png, err := app.passQRCodePNG(req.RequestNumber)
+	if err != nil {
+		return err
+	}
+	text := strings.Join([]string{
+		"QR-код для прохода.",
+		"Заявка: " + req.RequestNumber,
+		"Покажите этот код администратору на входе.",
+	}, "\n")
+	if app.api == nil {
+		app.testReplies = append(app.testReplies, TestReply{Text: text})
+		return nil
+	}
+	return app.api.SendFileToUser(ctx, req.MaxUserID.Int64, text, "pass_"+req.RequestNumber+".png", png)
 }
 
 // updateRequestStatus меняет статус заявки и пишет событие в историю.

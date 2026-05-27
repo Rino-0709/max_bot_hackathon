@@ -41,6 +41,8 @@ func loadConfig() Config {
 		DatabaseURL:   os.Getenv("DATABASE_URL"),
 		PolicyVersion: getEnv("POLICY_VERSION", "personal-data-v1"),
 		MetricsAddr:   getEnv("METRICS_ADDR", ":8080"),
+		QRSecret:      os.Getenv("QR_SECRET"),
+		ScannerToken:  os.Getenv("SCANNER_ACCESS_TOKEN"),
 		AdminIDs:      parseIDSet(os.Getenv("ADMIN_USER_IDS")),
 		TechAdminIDs:  parseIDSet(os.Getenv("TECH_ADMIN_USER_IDS")),
 	}

@@ -425,6 +425,25 @@ func TestAdminSlashCommandIsNotAvailable(t *testing.T) {
 	}
 }
 
+// TestQRCodePayloadIsSigned проверяет отдельный сценарий бота, чтобы не гонять его вручную.
+func TestQRCodePayloadIsSigned(t *testing.T) {
+	app := &App{cfg: Config{QRSecret: "test-secret"}}
+	payload, err := app.passQRPayload("PASS-20260527-ABCDE")
+	if err != nil {
+		t.Fatalf("make payload: %v", err)
+	}
+	number, err := app.verifyPassQR(payload)
+	if err != nil {
+		t.Fatalf("verify payload: %v", err)
+	}
+	if number != "PASS-20260527-ABCDE" {
+		t.Fatalf("expected request number, got %q", number)
+	}
+	if _, err := app.verifyPassQR(strings.Replace(payload, "ABCDE", "ZZZZZ", 1)); err == nil {
+		t.Fatalf("expected tampered payload to fail")
+	}
+}
+
 // TestCustomDateInputMovesToTimeSelection проверяет отдельный сценарий бота, чтобы не гонять его вручную.
 func TestCustomDateInputMovesToTimeSelection(t *testing.T) {
 	app := newTestApp(t)

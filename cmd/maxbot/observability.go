@@ -128,6 +128,7 @@ func (app *App) serveMonitoring(ctx context.Context, addr string) error {
 	mux.HandleFunc("/healthz", app.healthHandler)
 	mux.HandleFunc("/readyz", app.healthHandler)
 	mux.HandleFunc("/metrics", app.metricsHandler)
+	app.registerScannerRoutes(mux)
 
 	server := &http.Server{
 		Addr:              addr,
