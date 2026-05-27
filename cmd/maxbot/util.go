@@ -111,13 +111,22 @@ func validatePurpose(value string) string {
 }
 
 func validateDate(value string) error {
-	if _, err := time.Parse("2006-01-02", value); err != nil {
+	visitDate, err := time.ParseInLocation("2006-01-02", value, moscowLocation())
+	if err != nil {
 		return errors.New("Дата должна быть в формате ДД.ММ.ГГГГ.")
 	}
 	if value < todayMoscow() {
 		return errors.New("Дата визита не может быть в прошлом.")
 	}
+	if !visitDate.Before(maxBookableDate()) {
+		return errors.New("Сейчас слишком рано оформлять пропуск на эту дату. Выберите дату раньше чем через 2 месяца.")
+	}
 	return nil
+}
+
+func maxBookableDate() time.Time {
+	now := moscowNow()
+	return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, moscowLocation()).AddDate(0, 2, 0)
 }
 
 func validateTime(value string) string {
@@ -220,6 +229,8 @@ func actionLabel(action string) string {
 		"re_entry":               "подтвердил повторный проход",
 		"zone_added":             "добавил зону",
 		"zone_toggled":           "изменил активность зоны",
+		"extra_fields_added":     "добавил доп. поля формы",
+		"extra_field_toggled":    "изменил доп. поле формы",
 		"clarification_answered": "ответил на уточнение",
 	}
 	if label, ok := labels[action]; ok {

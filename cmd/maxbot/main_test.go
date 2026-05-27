@@ -960,6 +960,9 @@ func TestValidationHelpers(t *testing.T) {
 	if validateVisitDateTime(future.Format("2006-01-02"), future.Format("15:04")) != "" {
 		t.Fatalf("future visit time should be valid")
 	}
+	if err := validateDate(maxBookableDate().Format("2006-01-02")); err == nil {
+		t.Fatalf("date exactly two months ahead must be rejected")
+	}
 	if got := moscowNow().Location(); got == nil {
 		t.Fatalf("moscow location fallback must never be nil")
 	}
@@ -1431,6 +1434,92 @@ func TestTechAdminCanManageZones(t *testing.T) {
 	}
 	if active != 0 {
 		t.Fatalf("expected inactive zone after toggle, got %d", active)
+	}
+}
+
+func TestTechAdminExtraFieldsAreCollectedAndShownInRequest(t *testing.T) {
+	app := newTestApp(t)
+	tech := setUserRole(t, app, createConsentedUser(t, app, 6301, "Тех Админ").MaxUserID, roleTechAdmin)
+	user := upsertConsentedUser(t, app)
+
+	NewScenario(t, app, testMaxUser(tech.MaxUserID, tech.DisplayName)).
+		ClickPayload("tech:add_extra_fields").
+		ExpectText("Напишите названия дополнительных полей").
+		Say("Номер машины\nКомментарий для проходной").
+		ExpectText("Дополнительные поля формы").
+		ExpectButton("Вкл: Номер машины").
+		ExpectButton("Вкл: Комментарий для проходной")
+
+	if err := app.ensureDraft(user.ID); err != nil {
+		t.Fatalf("ensure draft: %v", err)
+	}
+	if err := app.updateDraft(user.ID, map[string]interface{}{
+		"full_name":     "Иванов Иван Иванович",
+		"visit_date":    addDays(todayMoscow(), 1),
+		"visit_time":    "09:00",
+		"zone_id":       int64(1),
+		"visit_purpose": "Встреча на кафедре",
+	}); err != nil {
+		t.Fatalf("update draft: %v", err)
+	}
+	if _, err := app.createPassRequest(user); err == nil {
+		t.Fatalf("request with missing active extra fields must be rejected")
+	}
+	fields, err := app.activeExtraFields()
+	if err != nil {
+		t.Fatalf("active fields: %v", err)
+	}
+	for _, field := range fields {
+		value := "А123ВС77"
+		if field.Label == "Комментарий для проходной" {
+			value = "Пропустить к главному входу"
+		}
+		if err := app.setDraftExtraField(user.ID, field.ID, field.Label, value); err != nil {
+			t.Fatalf("set extra field: %v", err)
+		}
+	}
+	number, err := app.createPassRequest(user)
+	if err != nil {
+		t.Fatalf("create request with extra fields: %v", err)
+	}
+	req := mustRequestByNumber(t, app, number)
+	card := app.requestCardText(req)
+	if !strings.Contains(card, "Номер машины: А123ВС77") || !strings.Contains(card, "Комментарий для проходной: Пропустить к главному входу") {
+		t.Fatalf("expected extra fields in request card, got %q", card)
+	}
+}
+
+func TestAdminQueueOrdersByVisitDateAndTime(t *testing.T) {
+	app := newTestApp(t)
+	admin := setUserRole(t, app, createConsentedUser(t, app, 6401, "Админ").MaxUserID, roleAdmin)
+	user := upsertConsentedUser(t, app)
+	now := nowISO()
+	rows := []struct {
+		number string
+		date   string
+		time   string
+	}{
+		{"PASS-SORT-3", addDays(todayMoscow(), 2), "09:00"},
+		{"PASS-SORT-1", addDays(todayMoscow(), 1), "15:00"},
+		{"PASS-SORT-2", addDays(todayMoscow(), 1), "09:00"},
+	}
+	for _, item := range rows {
+		if _, err := app.exec(`
+			INSERT INTO pass_requests (request_number, user_id, full_name, visit_date, visit_time, zone_id, visit_purpose, status, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, 1, 'Тест сортировки', 'pending_review', ?, ?)
+		`, item.number, user.ID, item.number, item.date, item.time, now, now); err != nil {
+			t.Fatalf("insert sorted request: %v", err)
+		}
+	}
+	if err := app.adminQueue(context.Background(), BotContext{User: testMaxUser(admin.MaxUserID, admin.DisplayName)}, "pending_review", 0); err != nil {
+		t.Fatalf("admin queue: %v", err)
+	}
+	text := lastReply(t, app).Text
+	first := strings.Index(text, "PASS-SORT-2")
+	second := strings.Index(text, "PASS-SORT-1")
+	third := strings.Index(text, "PASS-SORT-3")
+	if first < 0 || second < 0 || third < 0 || !(first < second && second < third) {
+		t.Fatalf("expected queue ordered by visit date/time, got %q", text)
 	}
 }
 

@@ -47,6 +47,7 @@ func (app *App) initDB() error {
 			zone_id BIGINT REFERENCES zones(id),
 			custom_zone_text TEXT,
 			visit_purpose TEXT,
+			extra_fields_json TEXT,
 			created_at TEXT NOT NULL,
 			updated_at TEXT NOT NULL
 		);
@@ -61,6 +62,7 @@ func (app *App) initDB() error {
 			zone_id BIGINT REFERENCES zones(id),
 			custom_zone_text TEXT,
 			visit_purpose TEXT NOT NULL,
+			extra_fields_json TEXT,
 			status TEXT NOT NULL,
 			admin_reason_code TEXT,
 			public_comment TEXT,
@@ -87,6 +89,14 @@ func (app *App) initDB() error {
 			created_at TEXT NOT NULL
 		);
 
+		CREATE TABLE IF NOT EXISTS extra_field_definitions (
+			id BIGSERIAL PRIMARY KEY,
+			label TEXT NOT NULL UNIQUE,
+			is_active INTEGER NOT NULL DEFAULT 1,
+			sort_order INTEGER NOT NULL DEFAULT 0,
+			created_at TEXT NOT NULL
+		);
+
 		CREATE TABLE IF NOT EXISTS sessions (
 			max_user_id BIGINT PRIMARY KEY,
 			state TEXT NOT NULL,
@@ -108,6 +118,9 @@ func (app *App) initDB() error {
 		CREATE INDEX IF NOT EXISTS idx_pass_requests_status_date ON pass_requests(status, visit_date);
 		CREATE INDEX IF NOT EXISTS idx_entry_events_request ON entry_events(pass_request_id);
 		CREATE INDEX IF NOT EXISTS idx_audit_log_actor_created ON audit_log(actor_max_user_id, created_at DESC);
+
+		ALTER TABLE draft_requests ADD COLUMN IF NOT EXISTS extra_fields_json TEXT;
+		ALTER TABLE pass_requests ADD COLUMN IF NOT EXISTS extra_fields_json TEXT;
 	`)
 	if err != nil {
 		return err
@@ -193,11 +206,11 @@ func (app *App) setRole(maxUserID int64, role string) error {
 
 func (app *App) getDraft(userID int64) (*DraftRow, error) {
 	row := app.queryRow(`
-		SELECT id, user_id, full_name, visit_date, visit_time, zone_id, custom_zone_text, visit_purpose
+		SELECT id, user_id, full_name, visit_date, visit_time, zone_id, custom_zone_text, visit_purpose, extra_fields_json
 		FROM draft_requests WHERE user_id = ?
 	`, userID)
 	var draft DraftRow
-	err := row.Scan(&draft.ID, &draft.UserID, &draft.FullName, &draft.VisitDate, &draft.VisitTime, &draft.ZoneID, &draft.CustomZoneText, &draft.VisitPurpose)
+	err := row.Scan(&draft.ID, &draft.UserID, &draft.FullName, &draft.VisitDate, &draft.VisitTime, &draft.ZoneID, &draft.CustomZoneText, &draft.VisitPurpose, &draft.ExtraFieldsJSON)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -218,7 +231,7 @@ func (app *App) updateDraft(userID int64, values map[string]interface{}) error {
 		return nil
 	}
 	allowed := map[string]bool{
-		"full_name": true, "visit_date": true, "visit_time": true, "zone_id": true, "custom_zone_text": true, "visit_purpose": true,
+		"full_name": true, "visit_date": true, "visit_time": true, "zone_id": true, "custom_zone_text": true, "visit_purpose": true, "extra_fields_json": true,
 	}
 	set := make([]string, 0, len(values)+1)
 	args := make([]interface{}, 0, len(values)+2)
@@ -252,6 +265,11 @@ func (app *App) createPassRequest(user UserRow) (string, error) {
 	}
 	if errText := validateVisitDateTime(draft.VisitDate.String, draft.VisitTime.String); errText != "" {
 		return "", errors.New(errText)
+	}
+	if field, ok, err := app.nextMissingExtraField(user.ID); err != nil {
+		return "", err
+	} else if ok {
+		return "", fmt.Errorf("Заполните дополнительное поле: %s.", field.Label)
 	}
 
 	statuses := []string{"pending_review", "clarification_requested", "approved", "passed"}
@@ -287,11 +305,11 @@ func (app *App) createPassRequest(user UserRow) (string, error) {
 	err = app.queryRow(`
 		INSERT INTO pass_requests (
 			request_number, user_id, full_name, visit_date, visit_time, zone_id, custom_zone_text,
-			visit_purpose, status, created_at, updated_at
+			visit_purpose, extra_fields_json, status, created_at, updated_at
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending_review', ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_review', ?, ?)
 		RETURNING id
-	`, number, user.ID, draft.FullName.String, draft.VisitDate.String, draft.VisitTime.String, nullableIntArg(draft.ZoneID), nullableStringArg(draft.CustomZoneText), draft.VisitPurpose.String, now, now).Scan(&requestID)
+	`, number, user.ID, draft.FullName.String, draft.VisitDate.String, draft.VisitTime.String, nullableIntArg(draft.ZoneID), nullableStringArg(draft.CustomZoneText), draft.VisitPurpose.String, nullableStringArg(draft.ExtraFieldsJSON), now, now).Scan(&requestID)
 	if err != nil {
 		return "", err
 	}
@@ -319,7 +337,7 @@ func (app *App) requestNumberExists(number string) bool {
 func (app *App) requestByID(id int64) (*RequestRow, error) {
 	return app.scanRequest(app.queryRow(`
 		SELECT pr.id, pr.request_number, pr.user_id, pr.full_name, pr.visit_date, pr.visit_time,
-			pr.zone_id, pr.custom_zone_text, pr.visit_purpose, pr.status, pr.public_comment,
+			pr.zone_id, pr.custom_zone_text, pr.visit_purpose, pr.extra_fields_json, pr.status, pr.public_comment,
 			u.display_name, u.max_user_id, z.short_name, z.address, pr.created_at, pr.updated_at
 		FROM pass_requests pr
 		JOIN users u ON u.id = pr.user_id
@@ -332,7 +350,7 @@ func (app *App) requestByNumber(number string) (*RequestRow, error) {
 	query := strings.TrimSpace(number)
 	return app.scanRequest(app.queryRow(`
 		SELECT pr.id, pr.request_number, pr.user_id, pr.full_name, pr.visit_date, pr.visit_time,
-			pr.zone_id, pr.custom_zone_text, pr.visit_purpose, pr.status, pr.public_comment,
+			pr.zone_id, pr.custom_zone_text, pr.visit_purpose, pr.extra_fields_json, pr.status, pr.public_comment,
 			u.display_name, u.max_user_id, z.short_name, z.address, pr.created_at, pr.updated_at
 		FROM pass_requests pr
 		JOIN users u ON u.id = pr.user_id
@@ -349,7 +367,7 @@ type rowScanner interface {
 
 func (app *App) scanRequest(row rowScanner) (*RequestRow, error) {
 	var req RequestRow
-	err := row.Scan(&req.ID, &req.RequestNumber, &req.UserID, &req.FullName, &req.VisitDate, &req.VisitTime, &req.ZoneID, &req.CustomZoneText, &req.VisitPurpose, &req.Status, &req.PublicComment, &req.DisplayName, &req.MaxUserID, &req.ZoneName, &req.ZoneAddress, &req.CreatedAt, &req.UpdatedAt)
+	err := row.Scan(&req.ID, &req.RequestNumber, &req.UserID, &req.FullName, &req.VisitDate, &req.VisitTime, &req.ZoneID, &req.CustomZoneText, &req.VisitPurpose, &req.ExtraFieldsJSON, &req.Status, &req.PublicComment, &req.DisplayName, &req.MaxUserID, &req.ZoneName, &req.ZoneAddress, &req.CreatedAt, &req.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}

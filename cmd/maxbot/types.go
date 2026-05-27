@@ -151,14 +151,15 @@ type UserRow struct {
 }
 
 type DraftRow struct {
-	ID             int64
-	UserID         int64
-	FullName       sql.NullString
-	VisitDate      sql.NullString
-	VisitTime      sql.NullString
-	ZoneID         sql.NullInt64
-	CustomZoneText sql.NullString
-	VisitPurpose   sql.NullString
+	ID              int64
+	UserID          int64
+	FullName        sql.NullString
+	VisitDate       sql.NullString
+	VisitTime       sql.NullString
+	ZoneID          sql.NullInt64
+	CustomZoneText  sql.NullString
+	VisitPurpose    sql.NullString
+	ExtraFieldsJSON sql.NullString
 }
 
 type ZoneRow struct {
@@ -171,23 +172,37 @@ type ZoneRow struct {
 }
 
 type RequestRow struct {
-	ID             int64
-	RequestNumber  string
-	UserID         int64
-	FullName       string
-	VisitDate      string
-	VisitTime      string
-	ZoneID         sql.NullInt64
-	CustomZoneText sql.NullString
-	VisitPurpose   string
-	Status         string
-	PublicComment  sql.NullString
-	DisplayName    sql.NullString
-	MaxUserID      sql.NullInt64
-	ZoneName       sql.NullString
-	ZoneAddress    sql.NullString
-	CreatedAt      string
-	UpdatedAt      string
+	ID              int64
+	RequestNumber   string
+	UserID          int64
+	FullName        string
+	VisitDate       string
+	VisitTime       string
+	ZoneID          sql.NullInt64
+	CustomZoneText  sql.NullString
+	VisitPurpose    string
+	ExtraFieldsJSON sql.NullString
+	Status          string
+	PublicComment   sql.NullString
+	DisplayName     sql.NullString
+	MaxUserID       sql.NullInt64
+	ZoneName        sql.NullString
+	ZoneAddress     sql.NullString
+	CreatedAt       string
+	UpdatedAt       string
+}
+
+type ExtraFieldRow struct {
+	ID        int64
+	Label     string
+	IsActive  int
+	SortOrder int
+}
+
+type ExtraFieldValue struct {
+	ID    int64  `json:"id"`
+	Label string `json:"label"`
+	Value string `json:"value"`
 }
 
 type ExportRequestRow struct {
@@ -197,6 +212,7 @@ type ExportRequestRow struct {
 	Time      string
 	Zone      string
 	Purpose   string
+	Extra     string
 	Status    string
 	Comment   string
 	UpdatedAt string

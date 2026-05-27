@@ -46,6 +46,9 @@ func (app *App) requestCardText(req RequestRow) string {
 		"Цель: " + req.VisitPurpose,
 		fmt.Sprintf("Проходы: %d", app.entryCount(req.ID)),
 	}
+	if extra := formatExtraFieldsForText(req.ExtraFieldsJSON.String); extra != "" {
+		lines = append(lines, "Доп. поля:\n"+extra)
+	}
 	if req.PublicComment.Valid && req.PublicComment.String != "" {
 		if req.Status != "clarification_requested" {
 			lines = append(lines, "Комментарий: "+req.PublicComment.String)
@@ -110,7 +113,7 @@ func (app *App) showMyRequests(ctx context.Context, bctx BotContext, user UserRo
 	}
 	rows, err := app.query(`
 		SELECT pr.id, pr.request_number, pr.user_id, pr.full_name, pr.visit_date, pr.visit_time,
-			pr.zone_id, pr.custom_zone_text, pr.visit_purpose, pr.status, pr.public_comment,
+			pr.zone_id, pr.custom_zone_text, pr.visit_purpose, pr.extra_fields_json, pr.status, pr.public_comment,
 			u.display_name, u.max_user_id, z.short_name, z.address, pr.created_at, pr.updated_at
 		FROM pass_requests pr
 		JOIN users u ON u.id = pr.user_id

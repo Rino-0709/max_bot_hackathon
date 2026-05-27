@@ -38,13 +38,13 @@ func (app *App) adminQueue(ctx context.Context, bctx BotContext, mode string, pa
 	queryArgs := append(args, limit, offset)
 	rows, err := app.query(`
 		SELECT pr.id, pr.request_number, pr.user_id, pr.full_name, pr.visit_date, pr.visit_time,
-			pr.zone_id, pr.custom_zone_text, pr.visit_purpose, pr.status, pr.public_comment,
+			pr.zone_id, pr.custom_zone_text, pr.visit_purpose, pr.extra_fields_json, pr.status, pr.public_comment,
 			u.display_name, u.max_user_id, z.short_name, z.address, pr.created_at, pr.updated_at
 		FROM pass_requests pr
 		JOIN users u ON u.id = pr.user_id
 		LEFT JOIN zones z ON z.id = pr.zone_id
 		WHERE `+where+`
-		ORDER BY pr.created_at ASC
+		ORDER BY pr.visit_date ASC, pr.visit_time ASC, pr.created_at ASC
 		LIMIT ? OFFSET ?
 	`, queryArgs...)
 	if err != nil {
@@ -59,7 +59,7 @@ func (app *App) adminQueue(ctx context.Context, bctx BotContext, mode string, pa
 		if err != nil {
 			return err
 		}
-		lines = append(lines, fmt.Sprintf("%s - %s, %s, %s", req.RequestNumber, req.FullName, formatDate(req.VisitDate), app.requestZone(*req)))
+		lines = append(lines, fmt.Sprintf("%s - %s, %s %s, %s", req.RequestNumber, req.FullName, formatDate(req.VisitDate), req.VisitTime, app.requestZone(*req)))
 		buttonRows = append(buttonRows, []Button{btn(req.RequestNumber, fmt.Sprintf("request:open:%d", req.ID), "")})
 	}
 	if len(lines) == 0 {
@@ -159,7 +159,7 @@ func (app *App) exportRequestsByStatuses(date string, statuses []string) ([]Expo
 	rows, err := app.query(`
 		SELECT pr.request_number, pr.full_name, pr.visit_date, pr.visit_time,
 			COALESCE(z.short_name, pr.custom_zone_text, 'Не указано'),
-			pr.visit_purpose, pr.status, COALESCE(pr.public_comment, ''), pr.updated_at
+			pr.visit_purpose, COALESCE(pr.extra_fields_json, ''), pr.status, COALESCE(pr.public_comment, ''), pr.updated_at
 		FROM pass_requests pr
 		LEFT JOIN zones z ON z.id = pr.zone_id
 		WHERE pr.visit_date = ? AND pr.status IN (`+placeholders+`)
@@ -173,7 +173,7 @@ func (app *App) exportRequestsByStatuses(date string, statuses []string) ([]Expo
 	var result []ExportRequestRow
 	for rows.Next() {
 		var row ExportRequestRow
-		if err := rows.Scan(&row.Number, &row.FullName, &row.Date, &row.Time, &row.Zone, &row.Purpose, &row.Status, &row.Comment, &row.UpdatedAt); err != nil {
+		if err := rows.Scan(&row.Number, &row.FullName, &row.Date, &row.Time, &row.Zone, &row.Purpose, &row.Extra, &row.Status, &row.Comment, &row.UpdatedAt); err != nil {
 			return nil, err
 		}
 		result = append(result, row)
@@ -185,7 +185,7 @@ func (app *App) exportRequestsByStatuses(date string, statuses []string) ([]Expo
 }
 
 func writeExportSheet(workbook *excelize.File, sheet string, rows []ExportRequestRow) error {
-	headers := []string{"Номер", "ФИО", "Дата", "Время", "Зона", "Цель", "Статус", "Комментарий", "Обновлено"}
+	headers := []string{"Номер", "ФИО", "Дата", "Время", "Зона", "Цель", "Доп. поля", "Статус", "Комментарий", "Обновлено"}
 	if err := workbook.SetSheetRow(sheet, "A1", &headers); err != nil {
 		return err
 	}
@@ -197,6 +197,7 @@ func writeExportSheet(workbook *excelize.File, sheet string, rows []ExportReques
 			item.Time,
 			item.Zone,
 			item.Purpose,
+			formatExtraFieldsForText(item.Extra),
 			statusLabel(item.Status),
 			item.Comment,
 			formatDateTime(item.UpdatedAt),
@@ -210,10 +211,10 @@ func writeExportSheet(workbook *excelize.File, sheet string, rows []ExportReques
 	if err != nil {
 		return err
 	}
-	if err := workbook.SetCellStyle(sheet, "A1", "I1", headerStyle); err != nil {
+	if err := workbook.SetCellStyle(sheet, "A1", "J1", headerStyle); err != nil {
 		return err
 	}
-	for _, col := range []string{"A", "B", "C", "D", "E", "F", "G", "H", "I"} {
+	for _, col := range []string{"A", "B", "C", "D", "E", "F", "G", "H", "I", "J"} {
 		if err := workbook.SetColWidth(sheet, col, col, 18); err != nil {
 			return err
 		}

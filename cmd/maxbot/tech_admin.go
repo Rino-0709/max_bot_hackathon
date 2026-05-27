@@ -9,11 +9,12 @@ import (
 )
 
 func (app *App) techMenu(ctx context.Context, bctx BotContext) error {
-	var zones int
+	var zones, extraFields int
 	_ = app.queryRow(`SELECT COUNT(*) FROM zones WHERE is_active = 1`).Scan(&zones)
-	text := fmt.Sprintf("Техадмин\nАктивных зон: %d", zones)
+	_ = app.queryRow(`SELECT COUNT(*) FROM extra_field_definitions WHERE is_active = 1`).Scan(&extraFields)
+	text := fmt.Sprintf("Техадмин\nАктивных зон: %d\nДоп. полей формы: %d", zones, extraFields)
 	return app.reply(ctx, bctx, text, [][]Button{
-		{btn("Зоны", "tech:zones", "")},
+		{btn("Зоны", "tech:zones", ""), btn("Доп. поля", "tech:extra_fields", "")},
 		{btn("Обычные админы", "tech:admins", "")},
 		{btn("Тех админы", "tech:tech_admins", "")},
 		{btn("Главное меню", "menu", "")},

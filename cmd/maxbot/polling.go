@@ -456,7 +456,7 @@ func (app *App) handleDraftCallback(ctx context.Context, bctx BotContext, user U
 		return app.reply(ctx, bctx, "Что изменить?", [][]Button{
 			{btn("ФИО", "draft:edit_full_name", ""), btn("Дата", "draft:edit_date", "")},
 			{btn("Время", "draft:edit_time", ""), btn("Корпус/зона", "draft:edit_zone", "")},
-			{btn("Цель", "draft:edit_purpose", "")},
+			{btn("Цель", "draft:edit_purpose", ""), btn("Доп. поля", "draft:edit_extra_fields", "")},
 			{btn("Назад", "draft:summary", ""), btn("Главное меню", "menu", "")},
 		})
 	case "summary":
@@ -470,6 +470,9 @@ func (app *App) handleDraftCallback(ctx context.Context, bctx BotContext, user U
 		return app.askTime(ctx, bctx)
 	case "back_zone":
 		return app.askZone(ctx, bctx)
+	case "back_purpose":
+		app.setSession(user.MaxUserID, "draft_purpose", nil)
+		return app.reply(ctx, bctx, "Кратко опишите цель визита.", draftBackRows("draft:back_zone"))
 	case "edit_full_name":
 		app.setSession(user.MaxUserID, "draft_full_name", map[string]string{"mode": "edit"})
 		return app.reply(ctx, bctx, "Введите ФИО полностью.", draftBackRows("draft:edit"))
@@ -482,6 +485,11 @@ func (app *App) handleDraftCallback(ctx context.Context, bctx BotContext, user U
 	case "edit_purpose":
 		app.setSession(user.MaxUserID, "draft_purpose", map[string]string{"mode": "edit"})
 		return app.reply(ctx, bctx, "Кратко опишите цель визита.", draftBackRows("draft:edit"))
+	case "edit_extra_fields":
+		if err := app.updateDraft(user.ID, map[string]interface{}{"extra_fields_json": nil}); err != nil {
+			return err
+		}
+		return app.askNextExtraFieldOrSummary(ctx, bctx, user)
 	case "date":
 		return app.setDraftDate(ctx, bctx, user, id)
 	case "set_date_summary":
@@ -564,7 +572,7 @@ func (app *App) showDataPolicy(ctx context.Context, bctx BotContext, user UserRo
 		"",
 		"Цель обработки: оформление разового гостевого пропуска, сопровождение заявки, уведомления по заявке, аудит действий и диагностика работы сервиса.",
 		"",
-		"Состав данных: MAX user id, отображаемое имя, ФИО, дата и примерное время визита, корпус/зона, цель визита, статус заявки, история действий и проходов.",
+		"Состав данных: MAX user id, отображаемое имя, ФИО, дата и примерное время визита, корпус/зона, цель визита, дополнительные поля формы, статус заявки, история действий и проходов.",
 		"",
 		"Не собираются: паспортные данные, банковские данные, адрес проживания и номер телефона.",
 		"",
@@ -618,6 +626,7 @@ func (app *App) withdrawConsent(ctx context.Context, user UserRow) error {
 		SET full_name = 'Удалено по запросу пользователя',
 			visit_purpose = 'Удалено по запросу пользователя',
 			custom_zone_text = NULL,
+			extra_fields_json = NULL,
 			public_comment = NULL,
 			status = CASE
 				WHEN status IN ('pending_review', 'clarification_requested', 'approved') THEN 'data_erasure_requested'
@@ -664,7 +673,7 @@ func (app *App) continueDraft(ctx context.Context, bctx BotContext, user UserRow
 		app.setSession(user.MaxUserID, "draft_purpose", nil)
 		return app.reply(ctx, bctx, "Кратко опишите цель визита.", draftBackRows("draft:back_zone"))
 	}
-	return app.showDraftSummary(ctx, bctx, user)
+	return app.askNextExtraFieldOrSummary(ctx, bctx, user)
 }
 
 func (app *App) askDate(ctx context.Context, bctx BotContext, user UserRow) error {
@@ -758,6 +767,9 @@ func (app *App) showDraftSummary(ctx context.Context, bctx BotContext, user User
 		"Корпус/зона: " + zone,
 		"Цель: " + nullText(draft.VisitPurpose),
 	}, "\n")
+	if extra := formatExtraFieldsForText(draft.ExtraFieldsJSON.String); extra != "" {
+		text += "\nДоп. поля:\n" + extra
+	}
 	return app.reply(ctx, bctx, text, [][]Button{
 		{btn("Отправить на рассмотрение", "draft:submit", "positive")},
 		{btn("Изменить", "draft:edit", "")},
@@ -898,6 +910,8 @@ func (app *App) handleTechCallback(ctx context.Context, bctx BotContext, user Us
 		return app.revokeAdmin(ctx, bctx, user, parseInt64(id))
 	case "zones":
 		return app.showZones(ctx, bctx)
+	case "extra_fields":
+		return app.showExtraFields(ctx, bctx)
 	case "toggle_zone":
 		zoneID := parseInt64(id)
 		var active int
@@ -916,6 +930,11 @@ func (app *App) handleTechCallback(ctx context.Context, bctx BotContext, user Us
 	case "add_zone":
 		app.setSession(user.MaxUserID, "tech_zone_name", nil)
 		return app.reply(ctx, bctx, "Введите короткое название зоны.", techBackRows())
+	case "add_extra_fields":
+		app.setSession(user.MaxUserID, "tech_extra_fields_add", nil)
+		return app.reply(ctx, bctx, "Напишите названия дополнительных полей. Можно сразу несколько: каждое с новой строки или через запятую.", techBackRows())
+	case "toggle_extra_field":
+		return app.toggleExtraField(ctx, bctx, user, parseInt64(id))
 	case "grant_admin":
 		app.setSession(user.MaxUserID, "tech_grant_admin", nil)
 		return app.reply(ctx, bctx, "Введите MAX user id пользователя, которому нужно выдать роль администратора.", techBackRows())
@@ -992,7 +1011,24 @@ func (app *App) handleSessionText(ctx context.Context, bctx BotContext, user Use
 		if err := app.updateDraft(user.ID, map[string]interface{}{"visit_purpose": text}); err != nil {
 			return err
 		}
-		return app.showDraftSummary(ctx, bctx, user)
+		if session.Data["mode"] == "edit" {
+			return app.showDraftSummary(ctx, bctx, user)
+		}
+		return app.askNextExtraFieldOrSummary(ctx, bctx, user)
+	case "draft_extra_field":
+		app.clearSession(user.MaxUserID)
+		fieldID := parseInt64(session.Data["field_id"])
+		label := session.Data["label"]
+		if label == "" || fieldID <= 0 {
+			return app.reply(ctx, bctx, "Не удалось распознать дополнительное поле. Вернитесь к черновику.", draftBackRows("draft:summary"))
+		}
+		if len([]rune(text)) > 240 {
+			return app.reply(ctx, bctx, "Ответ должен быть не длиннее 240 символов.", draftBackRows("draft:back_purpose"))
+		}
+		if err := app.setDraftExtraField(user.ID, fieldID, label, text); err != nil {
+			return err
+		}
+		return app.askNextExtraFieldOrSummary(ctx, bctx, user)
 	case "admin_search":
 		app.clearSession(user.MaxUserID)
 		req, err := app.requestByNumber(text)
@@ -1060,6 +1096,9 @@ func (app *App) handleSessionText(ctx context.Context, bctx BotContext, user Use
 	case "tech_grant_admin":
 		app.clearSession(user.MaxUserID)
 		return app.grantAdminFromText(ctx, bctx, user, text)
+	case "tech_extra_fields_add":
+		app.clearSession(user.MaxUserID)
+		return app.addExtraFieldsFromText(ctx, bctx, user, text)
 	}
 
 	return app.reply(ctx, bctx, "Не удалось обработать ввод. Используйте /reset_session.", mainMenuRows())
