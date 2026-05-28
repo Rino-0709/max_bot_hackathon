@@ -282,7 +282,7 @@ func (app *App) handleCommand(ctx context.Context, bctx BotContext, user UserRow
 		if !app.hasConsent(user.ID) {
 			return app.showConsent(ctx, bctx, user)
 		}
-		return app.reply(ctx, bctx, "Главное меню", app.mainMenu(user))
+		return app.showHomeMenu(ctx, bctx, user)
 	case "/whoami":
 		return app.reply(ctx, bctx, fmt.Sprintf("MAX user id: %d\nРоль: %s", user.MaxUserID, roleLabel(user.Role)), app.mainMenu(user))
 	case "/reset_session":
@@ -315,12 +315,18 @@ func (app *App) showConsent(ctx context.Context, bctx BotContext, user UserRow) 
 	})
 }
 
-// mainMenu собирает кнопки главного меню с учетом роли пользователя.
-func (app *App) mainMenu(user UserRow) [][]Button {
+// showHomeMenu открывает стартовое меню: выбор режима для ролей или клиентское меню для обычного пользователя.
+func (app *App) showHomeMenu(ctx context.Context, bctx BotContext, user UserRow) error {
+	if app.isAdmin(user) {
+		return app.reply(ctx, bctx, "Выберите меню", app.roleMenu(user))
+	}
+	return app.reply(ctx, bctx, "Меню клиента", app.clientMenu())
+}
+
+// roleMenu показывает доступные рабочие режимы для пользователя с ролью.
+func (app *App) roleMenu(user UserRow) [][]Button {
 	rows := [][]Button{
-		{btn("Создать пропуск", "draft:start", "positive")},
-		{btn("Мои заявки", "my:list", ""), btn("Мои проходы", "my:entries", "")},
-		{btn("Политика и согласие", "data:policy", "")},
+		{btn("Меню клиента", "menu:client", "")},
 	}
 	if app.isAdmin(user) {
 		rows = append(rows, []Button{btn("Меню админа", "admin:menu", "")})
@@ -329,6 +335,23 @@ func (app *App) mainMenu(user UserRow) [][]Button {
 		rows = append(rows, []Button{btn("Меню тех админа", "tech:menu", "")})
 	}
 	return rows
+}
+
+// clientMenu собирает обычное меню инициатора без административных действий.
+func (app *App) clientMenu() [][]Button {
+	return [][]Button{
+		{btn("Создать пропуск", "draft:start", "positive")},
+		{btn("Мои заявки", "my:list", ""), btn("Мои проходы", "my:entries", "")},
+		{btn("Политика и согласие", "data:policy", "")},
+	}
+}
+
+// mainMenu возвращает главное меню с учетом роли пользователя.
+func (app *App) mainMenu(user UserRow) [][]Button {
+	if app.isAdmin(user) {
+		return app.roleMenu(user)
+	}
+	return app.clientMenu()
 }
 
 // btn создает inline-кнопку MAX в короткой записи.
@@ -401,7 +424,10 @@ func (app *App) handleCallback(ctx context.Context, bctx BotContext, user UserRo
 			return err
 		}
 		app.audit(user.MaxUserID, "consent_accepted", "user", user.ID, map[string]string{"policy": app.cfg.PolicyVersion})
-		return app.reply(ctx, bctx, "Согласие сохранено.", app.mainMenu(user))
+		if app.isAdmin(user) {
+			return app.reply(ctx, bctx, "Согласие сохранено. Выберите меню.", app.roleMenu(user))
+		}
+		return app.reply(ctx, bctx, "Согласие сохранено.", app.clientMenu())
 	}
 	if bctx.Payload == "data:policy" {
 		return app.showDataPolicy(ctx, bctx, user)
@@ -416,7 +442,10 @@ func (app *App) handleCallback(ctx context.Context, bctx BotContext, user UserRo
 	switch scope {
 	case "menu":
 		app.clearSession(user.MaxUserID)
-		return app.reply(ctx, bctx, "Главное меню", app.mainMenu(user))
+		if action == "client" {
+			return app.reply(ctx, bctx, "Меню клиента", app.clientMenu())
+		}
+		return app.showHomeMenu(ctx, bctx, user)
 	case "draft":
 		return app.handleDraftCallback(ctx, bctx, user, action, id)
 	case "my":

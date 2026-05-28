@@ -445,6 +445,37 @@ func TestQRCodePayloadIsSigned(t *testing.T) {
 	}
 }
 
+// TestStartMenuSeparatesClientAndAdminModes проверяет выбор меню для пользователей с ролями.
+func TestStartMenuSeparatesClientAndAdminModes(t *testing.T) {
+	app := newTestApp(t)
+	client := upsertConsentedUser(t, app)
+	admin := setUserRole(t, app, createConsentedUser(t, app, 2301, "Администратор").MaxUserID, roleAdmin)
+	tech := setUserRole(t, app, createConsentedUser(t, app, 2302, "Техадмин").MaxUserID, roleTechAdmin)
+
+	NewScenario(t, app, testMaxUser(client.MaxUserID, client.DisplayName)).
+		Command("/start").
+		ExpectText("Меню клиента").
+		ExpectButton("Создать пропуск").
+		ExpectNoButton("Меню админа")
+
+	NewScenario(t, app, testMaxUser(admin.MaxUserID, admin.DisplayName)).
+		Command("/start").
+		ExpectText("Выберите меню").
+		ExpectButton("Меню клиента").
+		ExpectButton("Меню админа").
+		ExpectNoButton("Создать пропуск").
+		Click("Меню клиента").
+		ExpectText("Меню клиента").
+		ExpectButton("Создать пропуск")
+
+	NewScenario(t, app, testMaxUser(tech.MaxUserID, tech.DisplayName)).
+		Command("/start").
+		ExpectText("Выберите меню").
+		ExpectButton("Меню клиента").
+		ExpectButton("Меню админа").
+		ExpectButton("Меню тех админа")
+}
+
 // TestPersonalScannerKeyRecordsEntryActor проверяет личный ключ сканера и автора прохода.
 func TestPersonalScannerKeyRecordsEntryActor(t *testing.T) {
 	app := newTestApp(t)
