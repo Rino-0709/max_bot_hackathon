@@ -29,16 +29,18 @@ var initialZones = []struct {
 }
 
 type Config struct {
-	Token         string
-	DBDriver      string
-	DataDir       string
-	DatabaseURL   string
-	PolicyVersion string
-	MetricsAddr   string
-	QRSecret      string
-	ScannerToken  string
-	AdminIDs      map[int64]bool
-	TechAdminIDs  map[int64]bool
+	Token            string
+	DBDriver         string
+	DataDir          string
+	DatabaseURL      string
+	PolicyVersion    string
+	MetricsAddr      string
+	QRSecret         string
+	ScannerToken     string
+	ScannerTestToken string
+	ScannerPublicURL string
+	AdminIDs         map[int64]bool
+	TechAdminIDs     map[int64]bool
 }
 
 type App struct {
@@ -46,6 +48,7 @@ type App struct {
 	db          *sql.DB
 	api         *MaxAPI
 	metrics     *Metrics
+	scannerRate *RateLimiter
 	testReplies []TestReply
 	startMu     sync.Mutex
 	lastStart   map[int64]time.Time

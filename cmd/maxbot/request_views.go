@@ -223,10 +223,11 @@ func (app *App) showHistory(ctx context.Context, bctx BotContext, requestID int6
 // showEntries показывает проходы по выбранной заявке.
 func (app *App) showEntries(ctx context.Context, bctx BotContext, requestID int64) error {
 	rows, err := app.query(`
-		SELECT entry_type, created_at
-		FROM entry_events
-		WHERE pass_request_id = ?
-		ORDER BY created_at ASC
+		SELECT ee.entry_type, ee.created_at, u.display_name, u.max_user_id
+		FROM entry_events ee
+		JOIN users u ON u.id = ee.actor_user_id
+		WHERE ee.pass_request_id = ?
+		ORDER BY ee.created_at ASC
 	`, requestID)
 	if err != nil {
 		return err
@@ -235,11 +236,12 @@ func (app *App) showEntries(ctx context.Context, bctx BotContext, requestID int6
 
 	var lines []string
 	for rows.Next() {
-		var entryType, created string
-		if err := rows.Scan(&entryType, &created); err != nil {
+		var entryType, created, actorName string
+		var actorMaxID int64
+		if err := rows.Scan(&entryType, &created, &actorName, &actorMaxID); err != nil {
 			return err
 		}
-		lines = append(lines, fmt.Sprintf("%s - %s", formatDateTime(created), entryLabel(entryType)))
+		lines = append(lines, fmt.Sprintf("%s - %s\nАдминистратор: %s (%d)", formatDateTime(created), entryLabel(entryType), actorName, actorMaxID))
 	}
 	if len(lines) == 0 {
 		lines = []string{"Проходов по заявке пока нет."}

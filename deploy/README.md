@@ -50,7 +50,10 @@ nano .env
 - `TECH_ADMIN_USER_IDS`;
 - `QR_SECRET`;
 - `SCANNER_ACCESS_TOKEN`;
-- `SCANNER_BIND` и `SCANNER_PORT`, если сканер нужно открыть наружу;
+- `SCANNER_TEST_ACCESS_TOKEN`;
+- `SCANNER_PUBLIC_URL`;
+- `SCANNER_BIND=0.0.0.0`, если публичный HTTPS-сканер должен быть доступен с телефона;
+- `SCANNER_FALLBACK_BIND=127.0.0.1`, чтобы запасные порты `8081` и `8443` не открывались наружу;
 - `POSTGRES_PASSWORD`;
 - `GRAFANA_ADMIN_PASSWORD`.
 
@@ -89,9 +92,9 @@ http://127.0.0.1:8080/scanner
 
 ```text
 https://scanner.aksenovaks.online/scanner
-http://SERVER_IP:8081/scanner
-https://SERVER_IP:8443/scanner
 ```
+
+Запасные адреса `http://127.0.0.1:8081/scanner` и `https://127.0.0.1:8443/scanner` оставлены для локальной диагностики на сервере.
 
 Grafana на самом сервере:
 

@@ -117,7 +117,7 @@ func parseExtraFieldLabels(text string) []string {
 	for _, part := range parts {
 		label := normalizeSpaces(part)
 		label = strings.Trim(label, ".:-")
-		if label == "" || len([]rune(label)) > 80 {
+		if label == "" || len([]rune(label)) > 80 || containsControlChars(label) {
 			continue
 		}
 		key := strings.ToLower(label)
@@ -126,6 +126,9 @@ func parseExtraFieldLabels(text string) []string {
 		}
 		seen[key] = true
 		result = append(result, label)
+		if len(result) >= 20 {
+			break
+		}
 	}
 	return result
 }

@@ -207,7 +207,7 @@ func (app *App) revokeAdmin(ctx context.Context, bctx BotContext, actor UserRow,
 		return err
 	}
 	app.audit(actor.MaxUserID, "admin_role_revoked", "user", maxUserID, nil)
-	app.sendUserNotification(ctx, maxUserID, "У вас отозвана роль администратора в боте Весенний_код_1.")
+	app.sendUserNotification(ctx, maxUserID, "У вас отозвана роль администратора в сервисе «Электронное бюро пропусков».")
 	return app.reply(ctx, bctx, fmt.Sprintf("Роль администратора отозвана у пользователя %d.", maxUserID), techBackRows())
 }
 
@@ -238,7 +238,7 @@ func (app *App) grantAdminFromText(ctx context.Context, bctx BotContext, actor U
 		return err
 	}
 	app.audit(actor.MaxUserID, "admin_role_granted", "user", targetID, nil)
-	if err := app.sendUserNotification(ctx, targetID, "Вам выдана роль администратора в боте Весенний_код_1. Откройте /start, чтобы увидеть админское меню."); err != nil {
+	if err := app.sendUserNotification(ctx, targetID, "Вам выдана роль администратора в сервисе «Электронное бюро пропусков». Откройте /start, чтобы увидеть админское меню."); err != nil {
 		log.Printf("notify new admin %d: %v", targetID, err)
 		return app.reply(ctx, bctx, fmt.Sprintf("Роль администратора выдана пользователю %d, но уведомление отправить не удалось.", targetID), techBackRows())
 	}

@@ -99,8 +99,14 @@ func nullableStringArg(value sql.NullString) interface{} {
 // validateFullName проверяет, что ФИО похоже на полное имя.
 func validateFullName(value string) string {
 	text := normalizeSpaces(value)
+	if containsControlChars(text) {
+		return "ФИО содержит недопустимые символы."
+	}
 	if len([]rune(text)) < 5 {
 		return "ФИО слишком короткое."
+	}
+	if len([]rune(text)) > 120 {
+		return "ФИО должно быть не длиннее 120 символов."
 	}
 	if regexp.MustCompile(`^\d+$`).MatchString(text) {
 		return "ФИО не может состоять только из цифр."
@@ -113,7 +119,10 @@ func validateFullName(value string) string {
 
 // validatePurpose проверяет, что цель визита заполнена нормально.
 func validatePurpose(value string) string {
-	text := strings.TrimSpace(value)
+	text := normalizeSpaces(value)
+	if containsControlChars(text) {
+		return "Цель визита содержит недопустимые символы."
+	}
 	if len([]rune(text)) < 3 {
 		return "Цель визита слишком короткая."
 	}
@@ -121,6 +130,31 @@ func validatePurpose(value string) string {
 		return "Цель визита должна быть не длиннее 300 символов."
 	}
 	return ""
+}
+
+// validateFreeText проверяет короткий свободный ввод для комментариев и уточнений.
+func validateFreeText(fieldName, value string, maxRunes int) string {
+	text := normalizeSpaces(value)
+	if text == "" {
+		return fieldName + " не должен быть пустым."
+	}
+	if containsControlChars(text) {
+		return fieldName + " содержит недопустимые символы."
+	}
+	if len([]rune(text)) > maxRunes {
+		return fmt.Sprintf("%s должен быть не длиннее %d символов.", fieldName, maxRunes)
+	}
+	return ""
+}
+
+// containsControlChars отсекает управляющие символы из пользовательского ввода.
+func containsControlChars(value string) bool {
+	for _, r := range value {
+		if r < 32 && r != '\n' && r != '\t' {
+			return true
+		}
+	}
+	return false
 }
 
 // validateDate проверяет дату на прошлое и слишком дальнее будущее.

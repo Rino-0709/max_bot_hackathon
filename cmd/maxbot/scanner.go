@@ -2,13 +2,12 @@ package main
 
 import (
 	"context"
-	"crypto/subtle"
 	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
-	"strings"
+	"time"
 )
 
 // scannerJSQR содержит локальный QR-движок для браузеров без BarcodeDetector.
@@ -59,13 +58,15 @@ func (app *App) scannerJSQRHandler(w http.ResponseWriter, r *http.Request) {
 
 // scannerVerifyHandler проверяет QR и возвращает карточку пропуска.
 func (app *App) scannerVerifyHandler(w http.ResponseWriter, r *http.Request) {
-	if !app.scannerAuthorized(r) {
+	if !app.allowScannerRequest(w, r, 90) {
+		return
+	}
+	if _, ok := app.scannerPrincipal(r); !ok {
 		writeScannerJSON(w, http.StatusUnauthorized, scannerResponse{Message: "Нет доступа к сканеру."})
 		return
 	}
-	var input scannerRequest
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		writeScannerJSON(w, http.StatusBadRequest, scannerResponse{Message: "Не удалось прочитать QR."})
+	input, ok := readScannerRequest(w, r)
+	if !ok {
 		return
 	}
 	result, err := app.verifyScannerPayload(r.Context(), input.QR)
@@ -78,13 +79,16 @@ func (app *App) scannerVerifyHandler(w http.ResponseWriter, r *http.Request) {
 
 // scannerEntryHandler фиксирует проход после успешной проверки QR.
 func (app *App) scannerEntryHandler(w http.ResponseWriter, r *http.Request) {
-	if !app.scannerAuthorized(r) {
+	if !app.allowScannerRequest(w, r, 30) {
+		return
+	}
+	actor, ok := app.scannerPrincipal(r)
+	if !ok {
 		writeScannerJSON(w, http.StatusUnauthorized, scannerResponse{Message: "Нет доступа к сканеру."})
 		return
 	}
-	var input scannerRequest
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		writeScannerJSON(w, http.StatusBadRequest, scannerResponse{Message: "Не удалось прочитать QR."})
+	input, ok := readScannerRequest(w, r)
+	if !ok {
 		return
 	}
 	result, err := app.verifyScannerPayload(r.Context(), input.QR)
@@ -94,11 +98,6 @@ func (app *App) scannerEntryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if !result.CanEnter {
 		writeScannerJSON(w, http.StatusOK, result)
-		return
-	}
-	actor, err := app.ensureScannerActor()
-	if err != nil {
-		writeScannerJSON(w, http.StatusInternalServerError, scannerResponse{Message: err.Error()})
 		return
 	}
 	entryType, err := app.registerEntry(result.RequestID, actor)
@@ -112,20 +111,35 @@ func (app *App) scannerEntryHandler(w http.ResponseWriter, r *http.Request) {
 	writeScannerJSON(w, http.StatusOK, result)
 }
 
-// scannerAuthorized проверяет токен доступа к web-сканеру.
-func (app *App) scannerAuthorized(r *http.Request) bool {
-	expected := strings.TrimSpace(app.cfg.ScannerToken)
-	if expected == "" {
+// allowScannerRequest ограничивает частоту запросов к публичному API сканера.
+func (app *App) allowScannerRequest(w http.ResponseWriter, r *http.Request, perMinute int) bool {
+	if r.Method != http.MethodPost {
+		writeScannerJSON(w, http.StatusMethodNotAllowed, scannerResponse{Message: "Метод не поддерживается."})
 		return false
 	}
-	got := strings.TrimSpace(r.URL.Query().Get("key"))
-	if got == "" {
-		got = strings.TrimPrefix(strings.TrimSpace(r.Header.Get("Authorization")), "Bearer ")
+	if app.scannerRate == nil {
+		app.scannerRate = &RateLimiter{}
 	}
-	if got == "" {
-		got = strings.TrimSpace(r.Header.Get("X-Scanner-Token"))
+	if !app.scannerRate.allow(scannerRateKey(r), perMinute, time.Minute) {
+		writeScannerJSON(w, http.StatusTooManyRequests, scannerResponse{Message: "Слишком много запросов. Подождите немного и попробуйте снова."})
+		return false
 	}
-	return subtle.ConstantTimeCompare([]byte(got), []byte(expected)) == 1
+	return true
+}
+
+// readScannerRequest читает QR из JSON и отсекает слишком большие запросы.
+func readScannerRequest(w http.ResponseWriter, r *http.Request) (scannerRequest, bool) {
+	var input scannerRequest
+	r.Body = http.MaxBytesReader(w, r.Body, 4096)
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeScannerJSON(w, http.StatusBadRequest, scannerResponse{Message: "Не удалось прочитать QR."})
+		return input, false
+	}
+	if len([]rune(input.QR)) > 512 {
+		writeScannerJSON(w, http.StatusBadRequest, scannerResponse{Message: "QR слишком длинный."})
+		return input, false
+	}
+	return input, true
 }
 
 // verifyScannerPayload проверяет подпись QR, заявку, дату и статус.

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -444,6 +445,110 @@ func TestQRCodePayloadIsSigned(t *testing.T) {
 	}
 }
 
+// TestPersonalScannerKeyRecordsEntryActor проверяет личный ключ сканера и автора прохода.
+func TestPersonalScannerKeyRecordsEntryActor(t *testing.T) {
+	app := newTestApp(t)
+	app.cfg.QRSecret = "test-secret"
+	app.cfg.ScannerPublicURL = "https://scanner.test/scanner"
+	initiator := upsertConsentedUser(t, app)
+	admin := setUserRole(t, app, createConsentedUser(t, app, 4201, "Админ сканера").MaxUserID, roleAdmin)
+	req := mustRequestByNumber(t, app, createDraftRequest(t, app, initiator, todayMoscow(), 1))
+	if err := app.updateRequestStatus(req.ID, "approved", admin, "approved", ""); err != nil {
+		t.Fatalf("approve: %v", err)
+	}
+
+	if err := app.showScannerKey(context.Background(), BotContext{User: testMaxUser(admin.MaxUserID, admin.DisplayName)}, admin); err != nil {
+		t.Fatalf("show scanner key: %v", err)
+	}
+	reply := lastReply(t, app)
+	if !strings.Contains(reply.Text, "Ключ сканера") || !strings.Contains(reply.Text, "https://scanner.test/scanner?key=adm.") {
+		t.Fatalf("expected personal scanner link, got %q", reply.Text)
+	}
+
+	token, err := app.scannerAdminToken(admin)
+	if err != nil {
+		t.Fatalf("admin scanner token: %v", err)
+	}
+	qrPayload, err := app.passQRPayload(req.RequestNumber)
+	if err != nil {
+		t.Fatalf("qr payload: %v", err)
+	}
+	response := postScannerJSON(t, app.scannerEntryHandler, "/scanner/api/entry?key="+url.QueryEscape(token), qrPayload)
+	if !response.OK || !response.CanEnter || response.EntryResult == "" {
+		t.Fatalf("expected successful scanner entry, got %#v", response)
+	}
+
+	var actorMaxID int64
+	if err := app.queryRow(`
+		SELECT u.max_user_id
+		FROM entry_events ee
+		JOIN users u ON u.id = ee.actor_user_id
+		WHERE ee.pass_request_id = ?
+		ORDER BY ee.created_at DESC
+		LIMIT 1
+	`, req.ID).Scan(&actorMaxID); err != nil {
+		t.Fatalf("load entry actor: %v", err)
+	}
+	if actorMaxID != admin.MaxUserID {
+		t.Fatalf("expected entry actor %d, got %d", admin.MaxUserID, actorMaxID)
+	}
+}
+
+// TestDemoScannerCommandCreatesSharedDemoQR проверяет временную команду /test для показа сканера.
+func TestDemoScannerCommandCreatesSharedDemoQR(t *testing.T) {
+	app := newTestApp(t)
+	app.cfg.QRSecret = "test-secret"
+	app.cfg.ScannerTestToken = "demo-token"
+	app.cfg.ScannerPublicURL = "https://scanner.test/scanner"
+
+	NewScenario(t, app, testMaxUser(7777, "Гость презентации")).
+		Command("/test").
+		ExpectText("Тест сканера").
+		ExpectText("https://scanner.test/scanner?key=demo-token")
+
+	req := mustRequestByNumber(t, app, "TEST-"+strings.ReplaceAll(todayMoscow(), "-", "")+"-SCAN")
+	qrPayload, err := app.passQRPayload(req.RequestNumber)
+	if err != nil {
+		t.Fatalf("qr payload: %v", err)
+	}
+	response := postScannerJSON(t, app.scannerEntryHandler, "/scanner/api/entry?key=demo-token", qrPayload)
+	if !response.OK || response.EntryResult == "" {
+		t.Fatalf("expected demo scanner entry, got %#v", response)
+	}
+	var actorMaxID int64
+	if err := app.queryRow(`
+		SELECT u.max_user_id
+		FROM entry_events ee
+		JOIN users u ON u.id = ee.actor_user_id
+		WHERE ee.pass_request_id = ?
+		ORDER BY ee.created_at DESC
+		LIMIT 1
+	`, req.ID).Scan(&actorMaxID); err != nil {
+		t.Fatalf("load demo actor: %v", err)
+	}
+	if actorMaxID != testScannerMaxUserID {
+		t.Fatalf("expected demo scanner actor %d, got %d", testScannerMaxUserID, actorMaxID)
+	}
+}
+
+// postScannerJSON вызывает JSON API сканера без запуска HTTP-сервера.
+func postScannerJSON(t *testing.T, handler http.HandlerFunc, target string, qr string) scannerResponse {
+	t.Helper()
+	body := bytes.NewBufferString(fmt.Sprintf(`{"qr":%q}`, qr))
+	req := httptest.NewRequest(http.MethodPost, target, body)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	handler(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected scanner status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var response scannerResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode scanner response: %v; body: %s", err, rec.Body.String())
+	}
+	return response
+}
+
 // TestCustomDateInputMovesToTimeSelection проверяет отдельный сценарий бота, чтобы не гонять его вручную.
 func TestCustomDateInputMovesToTimeSelection(t *testing.T) {
 	app := newTestApp(t)
@@ -632,7 +737,7 @@ func TestScenarioInitiatorCreatesPassWithManualDate(t *testing.T) {
 	s := NewScenario(t, app, user)
 
 	s.Command("/start").
-		ExpectText("Весенний_код_1").
+		ExpectText("Электронное бюро пропусков").
 		ExpectButton("Согласен").
 		Click("Согласен").
 		ExpectButton("Создать пропуск").
@@ -897,7 +1002,7 @@ func TestOnboardingConsentAndRoleMenus(t *testing.T) {
 	if err := app.handleBotContext(ctx, BotContext{User: maxUser, Text: "/start"}); err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	if !strings.Contains(lastReply(t, app).Text, "Весенний_код_1") {
+	if !strings.Contains(lastReply(t, app).Text, "Электронное бюро пропусков") {
 		t.Fatalf("expected consent screen, got %q", lastReply(t, app).Text)
 	}
 	if !strings.Contains(lastReply(t, app).Text, "паспортные данные") {

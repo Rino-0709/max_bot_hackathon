@@ -24,6 +24,7 @@ func (app *App) adminMenu(ctx context.Context, bctx BotContext) error {
 	return app.reply(ctx, bctx, text, [][]Button{
 		{btn("Очередь", "admin:queue:0", ""), btn("Активные сегодня", "admin:approved_today:0", "")},
 		{btn("Поиск по номеру", "admin:search", ""), btn("Экспорт Excel", "admin:export_active_today", "")},
+		{btn("Ключ сканера", "admin:scanner_key", "")},
 		{btn("Главное меню", "menu", "")},
 	})
 }

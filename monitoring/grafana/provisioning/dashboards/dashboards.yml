@@ -3,7 +3,7 @@ apiVersion: 1
 providers:
   - name: Spring Code Bot
     orgId: 1
-    folder: Весенний_код_1
+    folder: Электронное бюро пропусков
     type: file
     disableDeletion: false
     editable: true

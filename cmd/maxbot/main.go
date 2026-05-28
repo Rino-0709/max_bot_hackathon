@@ -57,7 +57,7 @@ func main() {
 		}()
 	}
 
-	log.Println("Весенний_код_1 Go bot started")
+	log.Println("Электронное бюро пропусков: bot started")
 	if err := app.poll(context.Background()); err != nil {
 		log.Fatalf("polling stopped: %v", err)
 	}

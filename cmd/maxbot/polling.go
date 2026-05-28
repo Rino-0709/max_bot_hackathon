@@ -204,6 +204,9 @@ func (app *App) handleBotContext(ctx context.Context, bctx BotContext) error {
 	if err != nil {
 		return err
 	}
+	if bctx.Text != "" && len([]rune(bctx.Text)) > 1200 {
+		return app.reply(ctx, bctx, "Сообщение слишком длинное. Сократите текст и отправьте ещё раз.", app.mainMenu(user))
+	}
 
 	if bctx.Text != "" && strings.HasPrefix(bctx.Text, "/") {
 		return app.handleCommand(ctx, bctx, user)
@@ -285,6 +288,8 @@ func (app *App) handleCommand(ctx context.Context, bctx BotContext, user UserRow
 	case "/reset_session":
 		app.clearSession(user.MaxUserID)
 		return app.reply(ctx, bctx, "Текущий текстовый ввод сброшен.", app.mainMenu(user))
+	case "/test":
+		return app.showScannerTest(ctx, bctx, user)
 	}
 	return app.reply(ctx, bctx, "Команда не найдена. Выберите действие в меню.", app.mainMenu(user))
 }
@@ -292,7 +297,7 @@ func (app *App) handleCommand(ctx context.Context, bctx BotContext, user UserRow
 // showConsent показывает стартовый экран с согласием на обработку данных.
 func (app *App) showConsent(ctx context.Context, bctx BotContext, user UserRow) error {
 	text := strings.Join([]string{
-		"Весенний_код_1",
+		"Электронное бюро пропусков",
 		"",
 		"Сервис оформления разового гостевого пропуска. Сервис не является официальной функцией платформы MAX.",
 		"",
@@ -582,7 +587,7 @@ func (app *App) showDataPolicy(ctx context.Context, bctx BotContext, user UserRo
 	text := strings.Join([]string{
 		"Политика данных",
 		"",
-		"Оператор сервиса: команда проекта Весенний_код_1. Перед промышленной эксплуатацией оператор и юридические документы должны быть утверждены организацией-владельцем.",
+		"Оператор сервиса: команда проекта «Электронное бюро пропусков». Перед промышленной эксплуатацией оператор и юридические документы должны быть утверждены организацией-владельцем.",
 		"",
 		"Цель обработки: оформление разового гостевого пропуска, сопровождение заявки, уведомления по заявке, аудит действий и диагностика работы сервиса.",
 		"",
@@ -860,6 +865,8 @@ func (app *App) handleAdminCallback(ctx context.Context, bctx BotContext, user U
 		return app.reply(ctx, bctx, "Введите номер заявки.", adminBackRows())
 	case "export_active_today":
 		return app.exportActiveToday(ctx, bctx)
+	case "scanner_key":
+		return app.showScannerKey(ctx, bctx, user)
 	}
 
 	requestID := parseInt64(id)
@@ -976,6 +983,9 @@ func (app *App) handleSessionText(ctx context.Context, bctx BotContext, user Use
 	if text == "" {
 		return app.reply(ctx, bctx, "Пришлите текстовое значение.", mainMenuRows())
 	}
+	if len([]rune(text)) > 1000 {
+		return app.reply(ctx, bctx, "Текст слишком длинный. Сократите сообщение и отправьте ещё раз.", mainMenuRows())
+	}
 
 	switch session.State {
 	case "draft_full_name":
@@ -1037,7 +1047,7 @@ func (app *App) handleSessionText(ctx context.Context, bctx BotContext, user Use
 			return app.reply(ctx, bctx, errText, draftBackRows(back))
 		}
 		app.clearSession(user.MaxUserID)
-		if err := app.updateDraft(user.ID, map[string]interface{}{"visit_purpose": text}); err != nil {
+		if err := app.updateDraft(user.ID, map[string]interface{}{"visit_purpose": normalizeSpaces(text)}); err != nil {
 			return err
 		}
 		if session.Data["mode"] == "edit" {
@@ -1045,21 +1055,24 @@ func (app *App) handleSessionText(ctx context.Context, bctx BotContext, user Use
 		}
 		return app.askNextExtraFieldOrSummary(ctx, bctx, user)
 	case "draft_extra_field":
-		app.clearSession(user.MaxUserID)
 		fieldID := parseInt64(session.Data["field_id"])
 		label := session.Data["label"]
 		if label == "" || fieldID <= 0 {
 			return app.reply(ctx, bctx, "Не удалось распознать дополнительное поле. Вернитесь к черновику.", draftBackRows("draft:summary"))
 		}
-		if len([]rune(text)) > 240 {
-			return app.reply(ctx, bctx, "Ответ должен быть не длиннее 240 символов.", draftBackRows("draft:back_purpose"))
+		if errText := validateFreeText("Ответ", text, 240); errText != "" {
+			return app.reply(ctx, bctx, errText, draftBackRows("draft:back_purpose"))
 		}
-		if err := app.setDraftExtraField(user.ID, fieldID, label, text); err != nil {
+		app.clearSession(user.MaxUserID)
+		if err := app.setDraftExtraField(user.ID, fieldID, label, normalizeSpaces(text)); err != nil {
 			return err
 		}
 		return app.askNextExtraFieldOrSummary(ctx, bctx, user)
 	case "admin_search":
 		app.clearSession(user.MaxUserID)
+		if !looksLikeRequestNumberQuery(text) {
+			return app.reply(ctx, bctx, "Введите полный номер заявки или последние 5 символов.", adminBackRows())
+		}
 		req, err := app.requestByNumber(text)
 		if err != nil {
 			return err
@@ -1072,16 +1085,16 @@ func (app *App) handleSessionText(ctx context.Context, bctx BotContext, user Use
 		app.clearSession(user.MaxUserID)
 		requestID := parseInt64(session.Data["request_id"])
 		comment := cleanAdminComment(text)
-		if comment == "" {
-			return app.reply(ctx, bctx, "Комментарий не должен быть пустым.", adminBackRows())
+		if errText := validateFreeText("Комментарий", comment, 240); errText != "" {
+			return app.reply(ctx, bctx, errText, adminBackRows())
 		}
 		return app.approveRequest(ctx, bctx, user, requestID, comment)
 	case "admin_reject_comment":
 		app.clearSession(user.MaxUserID)
 		requestID := parseInt64(session.Data["request_id"])
 		reason := cleanAdminComment(text)
-		if reason == "" {
-			return app.reply(ctx, bctx, "Причина отклонения не должна быть пустой.", adminBackRows())
+		if errText := validateFreeText("Причина отклонения", reason, 240); errText != "" {
+			return app.reply(ctx, bctx, errText, adminBackRows())
 		}
 		if err := app.updateRequestStatus(requestID, "rejected", user, "Заявка отклонена. Причина: "+reason, reason); err != nil {
 			return err
@@ -1089,35 +1102,51 @@ func (app *App) handleSessionText(ctx context.Context, bctx BotContext, user Use
 		app.notifyOwner(ctx, requestID, "Ваша заявка отклонена.\nПричина: "+reason)
 		return app.reply(ctx, bctx, "Заявка отклонена.", adminBackRows())
 	case "admin_clarify":
+		question := cleanAdminComment(text)
+		if errText := validateFreeText("Вопрос", question, 240); errText != "" {
+			return app.reply(ctx, bctx, errText, adminBackRows())
+		}
 		app.clearSession(user.MaxUserID)
 		requestID := parseInt64(session.Data["request_id"])
-		if err := app.updateRequestStatus(requestID, "clarification_requested", user, "Запрошено уточнение: "+text, text); err != nil {
+		if err := app.updateRequestStatus(requestID, "clarification_requested", user, "Запрошено уточнение: "+question, question); err != nil {
 			return err
 		}
-		app.notifyOwnerWithRows(ctx, requestID, "По вашей заявке запрошено уточнение.\n\nВопрос: "+text+"\n\nНажмите кнопку ниже, чтобы отправить ответ одним сообщением.", [][]Button{
+		app.notifyOwnerWithRows(ctx, requestID, "По вашей заявке запрошено уточнение.\n\nВопрос: "+question+"\n\nНажмите кнопку ниже, чтобы отправить ответ одним сообщением.", [][]Button{
 			{btn("Ответить на уточнение", fmt.Sprintf("request:answer_clarification:%d", requestID), "positive")},
 			{btn("Мои заявки", "my:list", "")},
 		})
 		return app.reply(ctx, bctx, "Уточнение запрошено.", adminBackRows())
 	case "initiator_clarify_answer":
+		answer := normalizeSpaces(text)
+		if errText := validateFreeText("Ответ", answer, 500); errText != "" {
+			return app.reply(ctx, bctx, errText, mainMenuRows())
+		}
 		app.clearSession(user.MaxUserID)
 		requestID := parseInt64(session.Data["request_id"])
 		if _, err := app.exec(`UPDATE pass_requests SET status = 'pending_review', public_comment = NULL, updated_at = ? WHERE id = ?`, nowISO(), requestID); err != nil {
 			return err
 		}
-		app.requestEvent(requestID, &user.ID, "clarification_answered", "Ответ инициатора: "+text)
+		app.requestEvent(requestID, &user.ID, "clarification_answered", "Ответ инициатора: "+answer)
 		app.audit(user.MaxUserID, "clarification_answered", "pass_request", requestID, nil)
 		return app.reply(ctx, bctx, "Ответ сохранён. Заявка вернулась на рассмотрение.", [][]Button{{btn("Мои заявки", "my:list", "")}})
 	case "tech_zone_name":
-		app.setSession(user.MaxUserID, "tech_zone_address", map[string]string{"short_name": text})
+		name := normalizeSpaces(text)
+		if errText := validateFreeText("Название зоны", name, 80); errText != "" {
+			return app.reply(ctx, bctx, errText, techBackRows())
+		}
+		app.setSession(user.MaxUserID, "tech_zone_address", map[string]string{"short_name": name})
 		return app.reply(ctx, bctx, "Введите адрес зоны.", techBackRows())
 	case "tech_zone_address":
 		shortName := session.Data["short_name"]
+		address := normalizeSpaces(text)
+		if errText := validateFreeText("Адрес зоны", address, 160); errText != "" {
+			return app.reply(ctx, bctx, errText, techBackRows())
+		}
 		app.clearSession(user.MaxUserID)
 		code := slug(shortName)
 		var sortOrder int
 		_ = app.queryRow(`SELECT COALESCE(MAX(sort_order), 0) + 1 FROM zones`).Scan(&sortOrder)
-		if _, err := app.exec(`INSERT INTO zones (code, short_name, address, sort_order) VALUES (?, ?, ?, ?)`, code, shortName, text, sortOrder); err != nil {
+		if _, err := app.exec(`INSERT INTO zones (code, short_name, address, sort_order) VALUES (?, ?, ?, ?)`, code, shortName, address, sortOrder); err != nil {
 			return err
 		}
 		app.audit(user.MaxUserID, "zone_added", "zone", 0, map[string]string{"short_name": shortName})
